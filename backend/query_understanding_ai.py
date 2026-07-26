@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 from groq import Groq
 
 from intent_router import detect_intent
+from language_support import (
+    expand_bangla_banglish_text,
+    has_bangla_script,
+)
 
 
 load_dotenv()
@@ -66,6 +70,12 @@ The search_query should be clean English terms useful for searching Eastern Bank
 
 Intent guidance:
 - Understand Banglish, Bangla-style English, broken English, spelling mistakes, and short customer messages semantically.
+- Banglish examples:
+  "charge koto", "account khulte chai", "card hariye geche",
+  "platinum card er supplementary charge", "deposit rate koto".
+- Bangla examples:
+  "সঞ্চয়ী হিসাবের ফি কত", "কার্ড হারিয়ে গেছে", "লোন রেট কত",
+  "শাখা কোথায়", "অনলাইন আবেদন লিংক".
 - Use account_information for broad account opening and account document requirement questions, even when the customer does not use formal English or does not write the word "open".
 - Do not classify broad account opening questions as online_apply.
 - Use online_apply only when the customer explicitly asks for an online application link, application form, apply link, or apply online page.
@@ -78,11 +88,16 @@ Intent guidance:
 
 def build_fallback_understanding(message):
     fallback_intent = detect_intent(message)
+    expanded_message = expand_bangla_banglish_text(message)
+    language = "bangla" if has_bangla_script(message) else "unknown"
+
+    if language == "unknown" and expanded_message != message:
+        language = "banglish"
 
     return {
         "intent": fallback_intent,
-        "search_query": message,
-        "language": "unknown",
+        "search_query": expanded_message,
+        "language": language,
     }
 
 

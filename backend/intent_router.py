@@ -1,8 +1,9 @@
 from complaint_manager import looks_like_customer_issue
+from language_support import expand_bangla_banglish_text
 
 
 def contains_any(message, keywords):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
 
     for keyword in keywords:
         if keyword in message:
@@ -12,7 +13,7 @@ def contains_any(message, keywords):
 
 
 def detect_intent(message):
-    message = message.lower().strip()
+    message = expand_bangla_banglish_text(message).lower().strip()
 
     # Online application link
     if contains_any(message, [
@@ -70,10 +71,6 @@ def detect_intent(message):
     ]):
         return "memory_question"
 
-    # Customer issue / complaint creation
-    if looks_like_customer_issue(message):
-        return "complaint_create"
-
     # Contact information
     if contains_any(message, [
         "email",
@@ -106,6 +103,10 @@ def detect_intent(message):
         "transaction not mine"
     ]):
         return "urgent_card_issue"
+
+    # Customer issue / complaint creation
+    if looks_like_customer_issue(message):
+        return "complaint_create"
 
     # Complaint creation
     if contains_any(message, [

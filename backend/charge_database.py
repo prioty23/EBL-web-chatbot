@@ -5,6 +5,8 @@ import csv
 import re
 import sqlite3
 
+from language_support import expand_bangla_banglish_text
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "EBL_chatbot.db"
@@ -39,6 +41,7 @@ GENERIC_QUERY_WORDS = {
     "is",
     "me",
     "of",
+    "only",
     "plc",
     "schedule",
     "tell",
@@ -74,6 +77,20 @@ SCHEDULE_WORDS = {
 }
 
 
+CARD_CONTEXT_WORDS = {
+    "atm",
+    "card",
+    "cards",
+    "credit",
+    "debit",
+    "diners",
+    "mastercard",
+    "prepaid",
+    "unionpay",
+    "visa",
+}
+
+
 FEE_TRIGGER_WORDS = {
     "activation",
     "advice",
@@ -82,6 +99,7 @@ FEE_TRIGGER_WORDS = {
     "amendment",
     "administrative",
     "annual",
+    "annually",
     "assurance",
     "atm",
     "balance",
@@ -146,6 +164,7 @@ FEE_TRIGGER_WORDS = {
     "voucher",
     "wallet",
     "withdrawal",
+    "yearly",
 }
 
 
@@ -157,6 +176,7 @@ TOPIC_WORDS = {
     "amendment",
     "administrative",
     "annual",
+    "annually",
     "assurance",
     "atm",
     "balance",
@@ -312,6 +332,7 @@ CHARGE_TYPE_WORDS = {
     "voucher",
     "wallet",
     "withdrawal",
+    "yearly",
 }
 
 
@@ -323,6 +344,7 @@ STRICT_CHARGE_NAME_WORDS = {
     "amendment",
     "administrative",
     "annual",
+    "annually",
     "assurance",
     "atm",
     "balance",
@@ -382,6 +404,7 @@ STRICT_CHARGE_NAME_WORDS = {
     "voucher",
     "wallet",
     "withdrawal",
+    "yearly",
 }
 
 
@@ -409,7 +432,8 @@ ALIASES = {
     "activation": {"activation", "activate", "dormant"},
     "amend": {"amendment", "amend"},
     "amendment": {"amendment", "amend"},
-    "annual": {"annual", "maintenance"},
+    "annual": {"annual", "annually", "maintenance", "yearly"},
+    "annually": {"annual", "annually", "yearly"},
     "cancel": {"cancellation", "cancel"},
     "cancellation": {"cancellation", "cancel"},
     "close": {"closing", "close"},
@@ -426,6 +450,9 @@ ALIASES = {
     "maintenance": {"maintenance", "maintain"},
     "saving": {"saving", "savings"},
     "savings": {"saving", "savings"},
+    "shubidha": {"shubidha", "subidha"},
+    "subidha": {"shubidha", "subidha"},
+    "yearly": {"annual", "annually", "yearly"},
 }
 
 
@@ -456,6 +483,7 @@ def row_from_sqlite(row):
 
 
 def normalize_text(text):
+    text = expand_bangla_banglish_text(text)
     text = (text or "").lower().replace(",", "")
     acronym_replacements = {
         "l/c": "lc",
@@ -470,6 +498,17 @@ def normalize_text(text):
 
     for original_text, replacement_text in acronym_replacements.items():
         text = text.replace(original_text, replacement_text)
+
+    spelling_replacements = {
+        "subidha": "shubidha",
+    }
+
+    for original_text, replacement_text in spelling_replacements.items():
+        text = re.sub(
+            rf"\b{re.escape(original_text)}\b",
+            replacement_text,
+            text,
+        )
 
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
@@ -676,11 +715,25 @@ def ensure_charge_database_ready(force_import=False):
 
 
 def detect_requested_schedule(words):
+    word_set = set(words)
+
+    if word_set & CARD_CONTEXT_WORDS:
+        return "Cards"
+
     for word in words:
         if word in SCHEDULE_WORDS:
             return SCHEDULE_WORDS[word]
 
     return ""
+
+
+def schedule_words_ignored_for_product(words):
+    ignored_words = set(SCHEDULE_WORDS)
+
+    if set(words) & CARD_CONTEXT_WORDS:
+        ignored_words -= {"corp", "corporate"}
+
+    return ignored_words
 
 
 def word_matches(word, row_words):
@@ -783,6 +836,20 @@ def score_charge_row(row, words, requested_schedule):
         elif word_matches(word, row_words):
             score += 15
 
+    if has_charge_trigger(words):
+        product_or_category_match = any(
+            word not in GENERIC_QUERY_WORDS
+            and word not in CHARGE_TYPE_WORDS
+            and (
+                word_matches(word, product_words)
+                or word_matches(word, category_words)
+            )
+            for word in words
+        )
+
+        if product_or_category_match:
+            score += 50
+
     phrase_text = normalize_text(
         f"{row['product']} {row['charge_name']} {row['condition']}"
     )
@@ -865,9 +932,11 @@ def get_candidate_rows(query, limit=80, allow_product_only=False):
         if score >= max(120, top_score * 0.72)
     ]
 
+    selected_rows = filter_rows_by_exact_charge_name_phrase(selected_rows, query)
+    selected_rows = filter_rows_by_charge_name_words(selected_rows, words)
     selected_rows = filter_rows_by_exact_product_phrase(selected_rows, query)
     selected_rows = filter_rows_by_specific_product_words(selected_rows, words)
-    selected_rows = filter_rows_by_charge_name_words(selected_rows, words)
+    selected_rows = filter_rows_by_default_card_product(selected_rows, words)
     selected_rows = filter_rows_by_card_context(selected_rows, words)
     selected_rows = filter_rows_by_query_condition(selected_rows, query)
     return selected_rows[:limit]
@@ -878,7 +947,7 @@ def specific_product_query_words(words):
         GENERIC_QUERY_WORDS
         | CHARGE_TYPE_WORDS
         | CONDITION_QUERY_WORDS
-        | set(SCHEDULE_WORDS)
+        | schedule_words_ignored_for_product(words)
         | {"account", "accounts", "bank", "banking", "card", "cards", "loan", "loans"}
     )
 
@@ -926,13 +995,137 @@ def filter_rows_by_exact_product_phrase(rows, query):
     if len(rows) <= 1:
         return rows
 
-    exact_rows = [
-        row
+    query_text = f" {normalize_text(query)} "
+
+    if rows_share_single_category(rows):
+        category_phrase = normalize_text(rows[0]["category"])
+        query_words = set(expand_words(tokenize(query)))
+        strict_charge_words = {
+            word
+            for word in query_words
+            if word in STRICT_CHARGE_NAME_WORDS
+            and word not in {"charge", "charges", "fee", "fees"}
+        }
+
+        if (
+            category_phrase
+            and f" {category_phrase} " in query_text
+            and query_words & {"charge", "charges", "fee", "fees", "cost"}
+            and not strict_charge_words
+        ):
+            return rows
+
+    whole_product_matches = []
+
+    for row in rows:
+        product_phrase = normalize_text(row["product"])
+
+        if (
+            product_phrase
+            and " fee " not in f" {product_phrase} "
+            and " charge " not in f" {product_phrase} "
+            and f" {product_phrase} " in query_text
+        ):
+            whole_product_matches.append((len(product_phrase.split()), row))
+
+    if whole_product_matches:
+        top_score = max(score for score, _row in whole_product_matches)
+        return [
+            row
+            for score, row in whole_product_matches
+            if score == top_score
+        ]
+
+    if rows_share_single_category(rows):
+        category_phrase = normalize_text(rows[0]["category"])
+
+        if category_phrase and f" {category_phrase} " in query_text:
+            return rows
+
+    exact_row_matches = [
+        (product_phrase_match_score(row, query), row)
         for row in rows
-        if row_product_phrase_in_query(row, query)
+    ]
+    exact_row_matches = [
+        (score, row)
+        for score, row in exact_row_matches
+        if score > 0
     ]
 
-    return exact_rows or rows
+    if not exact_row_matches:
+        return rows
+
+    top_score = max(score for score, _row in exact_row_matches)
+    return [
+        row
+        for score, row in exact_row_matches
+        if score == top_score
+    ]
+
+
+def normalized_charge_name_phrases(row):
+    raw_charge_name = row["charge_name"] or ""
+    parts = [raw_charge_name]
+    parts.extend(
+        re.split(
+            r"\s*/\s*|\s+-\s+|\s+\bor\b\s+|\s+\band\b\s+",
+            raw_charge_name,
+        )
+    )
+
+    phrases = []
+
+    for part in parts:
+        phrase = normalize_text(part)
+
+        if phrase and phrase not in phrases:
+            phrases.append(phrase)
+
+        words = phrase.split()
+
+        if len(words) > 2:
+            suffix_phrase = " ".join(words[1:])
+
+            if suffix_phrase and suffix_phrase not in phrases:
+                phrases.append(suffix_phrase)
+
+    return phrases
+
+
+def charge_name_phrase_match_score(row, query):
+    query_text = f" {normalize_text(query)} "
+    best_score = 0
+
+    for charge_name in normalized_charge_name_phrases(row):
+        if f" {charge_name} " in query_text:
+            best_score = max(best_score, len(charge_name.split()))
+
+    return best_score
+
+
+def filter_rows_by_exact_charge_name_phrase(rows, query):
+    if len(rows) <= 1:
+        return rows
+
+    exact_row_matches = [
+        (charge_name_phrase_match_score(row, query), row)
+        for row in rows
+    ]
+    exact_row_matches = [
+        (score, row)
+        for score, row in exact_row_matches
+        if score > 0
+    ]
+
+    if not exact_row_matches:
+        return rows
+
+    top_score = max(score for score, _row in exact_row_matches)
+    return [
+        row
+        for score, row in exact_row_matches
+        if score == top_score
+    ]
 
 
 def filter_rows_by_charge_name_words(rows, words):
@@ -992,6 +1185,60 @@ def filter_rows_by_charge_name_words(rows, words):
     return top_rows
 
 
+def filter_rows_by_default_card_product(rows, words):
+    if len(rows) <= 1:
+        return rows
+
+    word_set = set(words)
+
+    if not {"card", "credit"} <= word_set:
+        return rows
+
+    if "platinum" not in word_set:
+        return rows
+
+    card_product_rules = [
+        ({"corporate", "platinum"}, "visa corporate platinum"),
+        ({"women", "platinum"}, "visa women platinum"),
+        ({"unionpay", "platinum"}, "unionpay platinum"),
+        ({"army", "platinum"}, "visa army air force navy platinum"),
+        ({"air", "force", "platinum"}, "visa army air force navy platinum"),
+        ({"navy", "platinum"}, "visa army air force navy platinum"),
+    ]
+
+    for required_words, product_name in card_product_rules:
+        if required_words <= word_set:
+            matched_rows = [
+                row
+                for row in rows
+                if normalize_text(row["product"]) == product_name
+            ]
+
+            if matched_rows:
+                return matched_rows
+
+    specific_modifiers = {
+        "air",
+        "army",
+        "corporate",
+        "force",
+        "navy",
+        "unionpay",
+        "women",
+    }
+
+    if word_set & specific_modifiers:
+        return rows
+
+    visa_platinum_rows = [
+        row
+        for row in rows
+        if normalize_text(row["product"]) == "visa platinum"
+    ]
+
+    return visa_platinum_rows or rows
+
+
 def filter_rows_by_card_context(rows, words):
     if len(rows) <= 1:
         return rows
@@ -1020,7 +1267,7 @@ def filter_rows_by_card_context(rows, words):
         if supplementary_rows:
             return supplementary_rows
 
-    annual_words = {"annual", "renewal", "issuance"}
+    annual_words = {"annual", "annually", "renewal", "issuance", "yearly"}
 
     if annual_words & set(words):
         primary_rows = [
@@ -1338,9 +1585,22 @@ def all_rows_have_same_payable_value(rows):
 def normalized_product_phrases(row):
     raw_product = row["product"] or ""
     parts = [raw_product]
-    parts.extend(re.split(r"\s*/\s*|\s+\bor\b\s+|\s+\band\b\s+", raw_product))
+    parts.extend(
+        re.split(
+            r"\s*/\s*|\s+-\s+|\s+\bor\b\s+|\s+\band\b\s+",
+            raw_product,
+        )
+    )
 
     phrases = []
+    removable_suffixes = [
+        " account",
+        " accounts",
+        " card",
+        " cards",
+        " loan",
+        " loans",
+    ]
 
     for part in parts:
         phrase = normalize_text(part)
@@ -1348,17 +1608,32 @@ def normalized_product_phrases(row):
         if phrase and phrase not in phrases:
             phrases.append(phrase)
 
+        for suffix in removable_suffixes:
+            if phrase.endswith(suffix):
+                short_phrase = phrase[: -len(suffix)].strip()
+
+                if short_phrase and short_phrase not in phrases:
+                    phrases.append(short_phrase)
+
     return phrases
 
 
-def row_product_phrase_in_query(row, query):
+def product_phrase_match_score(row, query):
     query_text = f" {normalize_text(query)} "
+    best_score = 0
 
     for phrase in normalized_product_phrases(row):
-        if f" {phrase} " in query_text:
-            return True
+        if " fee " in f" {phrase} " or " charge " in f" {phrase} ":
+            continue
 
-    return False
+        if f" {phrase} " in query_text:
+            best_score = max(best_score, len(phrase.split()))
+
+    return best_score
+
+
+def row_product_phrase_in_query(row, query):
+    return product_phrase_match_score(row, query) > 0
 
 
 def query_mentions_product(row, query):
@@ -1373,7 +1648,10 @@ def query_mentions_product(row, query):
         - {"account", "loan", "fee", "charge"}
     )
 
-    return bool(query_words & specific_product_words)
+    return any(
+        word_matches(word, specific_product_words)
+        for word in query_words
+    )
 
 
 def prefer_generic_row(rows, query):
@@ -1382,6 +1660,14 @@ def prefer_generic_row(rows, query):
 
     if rows_have_same_charge_name(rows) and all_rows_have_same_payable_value(rows):
         return rows
+
+    query_text = f" {normalize_text(query)} "
+
+    if rows_share_single_category(rows):
+        category_phrase = normalize_text(rows[0]["category"])
+
+        if category_phrase and f" {category_phrase} " in query_text:
+            return rows
 
     exact_product_rows = [
         row
@@ -1530,6 +1816,12 @@ def format_single_row_answer(row):
 
         return f"{subject} is not applicable."
 
+    if (
+        normalize_text(row["charge_name"]) == "interest rate"
+        and normalize_text(condition) == "annual"
+    ):
+        return f"{row['product']} annual interest rate is {amount}."
+
     if should_show_condition(condition):
         return f"{subject} for {condition} is {amount}."
 
@@ -1550,6 +1842,16 @@ def rows_have_same_charge_name(rows):
 
     first_charge_name = rows[0]["charge_name"].strip().lower()
     return all(row["charge_name"].strip().lower() == first_charge_name for row in rows)
+
+
+def rows_have_multiple_schedules(rows):
+    schedules = {
+        row["schedule"].strip().lower()
+        for row in rows
+        if row["schedule"].strip()
+    }
+
+    return len(schedules) > 1
 
 
 def join_readable(items):
@@ -1586,19 +1888,37 @@ def format_product_charge_summary(rows):
 
     rows = sorted(rows, key=lambda row: row["id"])
     product = rows[0]["product"]
+    category = rows[0]["category"]
     bullets = []
+    include_schedule = rows_have_multiple_schedules(rows)
+    include_product = rows_have_multiple_products(rows)
+    heading = category if include_product and rows_share_single_category(rows) else product
 
-    for row in rows[:8]:
+    for row in rows:
         amount = normalize_amount(row["amount"], row["vat_note"])
         condition = display_condition(row)
         charge_name = row["charge_name"].strip()
+        label_parts = []
+
+        if include_schedule:
+            label_parts.append(row["schedule"].strip())
+
+        if include_product:
+            label_parts.append(row["product"].strip())
+
+        label_parts.append(charge_name)
 
         if should_show_condition(condition):
-            bullets.append(f"{charge_name} - {condition}: {amount}")
-        else:
-            bullets.append(f"{charge_name}: {amount}")
+            label_parts.append(condition)
 
-    return format_bullet_answer(f"{product} charges", bullets)
+        bullets.append(f"{' - '.join(label_parts)}: {amount}")
+
+    if category.lower() == "locker":
+        bullets.append(
+            "Note: Premium locker location is subject to bank authority approval"
+        )
+
+    return format_bullet_answer(f"{heading} charges", bullets)
 
 
 def rows_share_single_product(rows):
@@ -1607,6 +1927,55 @@ def rows_share_single_product(rows):
 
     first_product = rows[0]["product"].lower()
     return all(row["product"].lower() == first_product for row in rows)
+
+
+def rows_have_multiple_products(rows):
+    products = {
+        row["product"].strip().lower()
+        for row in rows
+        if row["product"].strip()
+    }
+
+    return len(products) > 1
+
+
+def rows_share_single_category(rows):
+    if not rows:
+        return False
+
+    first_category = rows[0]["category"].lower()
+    return all(row["category"].lower() == first_category for row in rows)
+
+
+def query_asks_product_charge_summary(query, rows):
+    if not rows or not (
+        rows_share_single_product(rows)
+        or rows_share_single_category(rows)
+    ):
+        return False
+
+    words = set(expand_words(tokenize(query)))
+
+    if not (words & {"charge", "charges", "fee", "fees", "cost"}):
+        return False
+
+    if len({row["charge_name"].strip().lower() for row in rows}) <= 1:
+        return False
+
+    product_words = row_field_words(rows[0], "product")
+    category_words = row_field_words(rows[0], "category")
+    product_query_words = [
+        word
+        for word in words
+        if word not in GENERIC_QUERY_WORDS
+        and word not in CHARGE_TYPE_WORDS
+        and (
+            word_matches(word, product_words)
+            or word_matches(word, category_words)
+        )
+    ]
+
+    return bool(product_query_words)
 
 
 def format_multi_row_answer(rows):
@@ -1641,13 +2010,21 @@ def format_multi_row_answer(rows):
     if rows_have_same_subject(rows) and len(rows) <= 12:
         subject = build_group_subject(rows)
         bullets = []
+        include_schedule = rows_have_multiple_schedules(rows)
 
         for row in rows:
             condition = display_condition(row)
             amount = normalize_amount(row["amount"], row["vat_note"])
+            label_parts = []
+
+            if include_schedule:
+                label_parts.append(row["schedule"].strip())
 
             if should_show_condition(condition):
-                bullets.append(f"{condition}: {amount}")
+                label_parts.append(condition)
+
+            if label_parts:
+                bullets.append(f"{' - '.join(label_parts)}: {amount}")
             else:
                 bullets.append(amount)
 
@@ -1729,6 +2106,9 @@ def answer_charge_question_from_db(query, allow_product_only=False):
     ):
         if rows_share_single_product(rows):
             return format_product_charge_summary(rows)
+
+    if len(rows) > 1 and query_asks_product_charge_summary(query, rows):
+        return format_product_charge_summary(rows)
 
     if len(rows) == 1:
         return format_single_row_answer(rows[0])

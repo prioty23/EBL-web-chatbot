@@ -2,6 +2,8 @@ MIN_CARD_DIGITS = 13
 MAX_CARD_DIGITS = 19
 PUNCTUATION = [":", "=", ".", ",", "?", "!", "-", "_", "/", "\\"] #replace with spaces to detect
 
+from language_support import expand_bangla_banglish_text, normalize_bangla_digits
+
 SAFETY_RESPONSE = ( #warning text
     "For your security, please do not share OTP, PIN, password, CVV, "
     "full card number or other sensitive banking details. "
@@ -61,7 +63,7 @@ def text_after(text: str, word: str) -> str:
 
 
 def clean_text(text: str) -> str: #prepares the text to make checking easier 
-    text = text.lower() #all letters to lowercase
+    text = normalize_bangla_digits(expand_bangla_banglish_text(text)).lower() #all letters to lowercase
 
     for symbol in PUNCTUATION: #replace pun with spaces
         text = text.replace(symbol, " ")

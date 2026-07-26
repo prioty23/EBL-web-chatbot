@@ -1,8 +1,12 @@
 import sqlite3
 from datetime import datetime, timedelta
+from pathlib import Path
+
+from language_support import expand_bangla_banglish_text
 
 
-DATABASE_NAME = "EBL_chatbot.db"
+BASE_DIR = Path(__file__).resolve().parent
+DATABASE_NAME = str(BASE_DIR / "EBL_chatbot.db")
 
 def add_column_if_missing(cursor, table_name, column_name, column_definition):
     cursor.execute(f"PRAGMA table_info({table_name})")
@@ -78,6 +82,8 @@ def create_database():
     add_column_if_missing(cursor, "complaints", "three_day_email_sent", "INTEGER DEFAULT 0")
     add_column_if_missing(cursor, "complaints", "final_status_email_sent", "INTEGER DEFAULT 0")
     add_column_if_missing(cursor, "complaints", "last_email_sent_at", "TEXT")
+    add_column_if_missing(cursor, "chat_logs", "feedback", "TEXT")
+    add_column_if_missing(cursor, "chat_logs", "feedback_at", "TEXT")
 
     connection.commit()
     connection.close()
@@ -122,8 +128,42 @@ def save_chat(
         created_at
     ))
 
+    chat_id = cursor.lastrowid
+
     connection.commit()
     connection.close()
+
+    return chat_id
+
+
+def save_chat_feedback(chat_id, session_id, feedback):
+    create_database()
+
+    connection = sqlite3.connect(DATABASE_NAME)
+    cursor = connection.cursor()
+
+    feedback_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("""
+        UPDATE chat_logs
+        SET feedback = ?, feedback_at = ?
+        WHERE id = ?
+        AND session_id = ?
+        AND bot_reply IS NOT NULL
+        AND bot_reply != ''
+    """, (
+        feedback,
+        feedback_at,
+        chat_id,
+        session_id,
+    ))
+
+    updated_rows = cursor.rowcount
+
+    connection.commit()
+    connection.close()
+
+    return updated_rows > 0
 
 
 def get_chat_history(session_id, limit=6):
@@ -720,6 +760,8 @@ def search_website_information(query, limit=5):
 
     if not query:
         return ""
+
+    query = expand_bangla_banglish_text(query)
 
     cleaned_query = (
         query.lower()

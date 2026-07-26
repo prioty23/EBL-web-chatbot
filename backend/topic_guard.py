@@ -1,3 +1,6 @@
+from language_support import expand_bangla_banglish_text
+
+
 BANKING_KEYWORDS = [
     "account", "savings", "current", "deposit", "fixed deposit",
     "loan", "card", "credit card", "debit card", "prepaid card",
@@ -58,6 +61,8 @@ IDENTITY_QUESTION_PHRASES = [
 
 
 def normalize_simple_message(message):
+    message = expand_bangla_banglish_text(message)
+
     return " ".join(
         message.lower()
         .replace("?", " ")
@@ -69,11 +74,42 @@ def normalize_simple_message(message):
     )
 
 
+def normalize_raw_simple_message(message):
+    return " ".join(
+        (message or "")
+        .lower()
+        .replace("?", " ")
+        .replace("!", " ")
+        .replace(".", " ")
+        .replace(",", " ")
+        .strip()
+        .split()
+    )
+
+
 def is_greeting_only(message):
-    message = message.lower().strip()
+    raw_message = normalize_raw_simple_message(message)
+    expanded_message = normalize_simple_message(message)
+
+    if raw_message in GREETING_WORDS or expanded_message in GREETING_WORDS:
+        return True
+
+    greeting_terms = set(GREETING_WORDS + [
+        "greeting",
+        "salam",
+        "আসসালামু",
+        "আলাইকুম",
+        "সালাম",
+        "হ্যালো",
+        "হাই",
+    ])
+    words = set(expanded_message.split())
+
+    if words and words <= greeting_terms:
+        return True
 
     for greeting in GREETING_WORDS:
-        if message == greeting:
+        if raw_message == greeting:
             return True
 
     return False
@@ -104,7 +140,7 @@ def get_identity_reply():
 
 
 def is_contact_question(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
 
     for word in CONTACT_WORDS:
         if word in message:
@@ -114,7 +150,7 @@ def is_contact_question(message):
 
 
 def is_banking_related(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
 
     for keyword in BANKING_KEYWORDS:
         if keyword in message:
@@ -124,7 +160,7 @@ def is_banking_related(message):
 
 
 def is_follow_up(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
 
     for word in FOLLOW_UP_WORDS:
         if word in message:

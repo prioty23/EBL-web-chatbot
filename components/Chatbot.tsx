@@ -7,22 +7,29 @@ import type { FormEvent, ReactNode } from "react";
 type Message = {
   role: "bot" | "user";
   text: string;
+  quickActions?: string[];
+  chatId?: number;
+  feedback?: FeedbackValue;
+  feedbackStatus?: FeedbackStatus;
 };
+
+type ChatApiResponse = {
+  reply?: string;
+  quick_actions?: string[];
+  chat_id?: number;
+};
+
+type FeedbackValue = "helpful" | "not_helpful";
+type FeedbackStatus = "saving" | "saved" | "error";
 
 const chatbotText = translations.en.chatbot;
 const CHATBOT_API_URL = "http://127.0.0.1:8000/chat";
+const CHATBOT_FEEDBACK_API_URL = "http://127.0.0.1:8000/chat/feedback";
 const ERROR_MESSAGE =
   "Sorry, I could not connect to the chatbot server. Please try again later.";
 
 const SESSION_STORAGE_KEY = "eastern_ai_session_id";
 const BOT_RESPONSE_DELAY_MS = 1400;
-const STARTER_WELCOME_MESSAGE = "Hello! How can I assist you today?";
-const STARTER_QUICK_ACTIONS = [
-  "Open an Account",
-  "Loan Information",
-  "Card Support",
-  "Schedule of Charges",
-];
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -303,32 +310,26 @@ function renderMessageContent(text: string) {
   return nodes;
 }
 
-function isConversationStarterMessage(message: string) {
-  const normalizedMessage = message.trim().toLowerCase();
-  const compactMessage = normalizedMessage.replace(/[^\w\s]/g, "");
-  const starterPrefixes = [
-    "hi",
-    "hello",
-    "hey",
-    "good morning",
-    "good afternoon",
-    "good evening",
-    "salam",
-    "assalamu alaikum",
-  ];
-  const exactStarterMessages = [
-    ...starterPrefixes,
-    "start",
-    "help",
-  ];
+function isFeedbackPromptText(text: string) {
+  const normalizedText = text.trim().toLowerCase();
 
-  if (exactStarterMessages.includes(compactMessage)) {
-    return true;
-  }
+  return (
+    normalizedText.startsWith("hello! welcome") ||
+    normalizedText.startsWith("hello! how can") ||
+    normalizedText.startsWith("which ") ||
+    normalizedText.startsWith("please specify") ||
+    normalizedText.startsWith("do you want") ||
+    normalizedText.startsWith("system error") ||
+    normalizedText === ERROR_MESSAGE.toLowerCase()
+  );
+}
 
-  return starterPrefixes.some(
-    (starter) =>
-      compactMessage === starter || compactMessage.startsWith(`${starter} `),
+function shouldShowFeedback(message: Message) {
+  return Boolean(
+    message.role === "bot" &&
+      message.chatId &&
+      !message.quickActions?.length &&
+      !isFeedbackPromptText(message.text),
   );
 }
 
@@ -337,12 +338,12 @@ export default function Chatbot() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasStartedConversation, setHasStartedConversation] = useState(false);
-  const [showStarterActions, setShowStarterActions] = useState(false);
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([]);
 
   const messageListRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const canEndConversation = messages.length > 0;
   const canGoBackToIntro =
     hasStartedConversation && messages.length === 0 && !isLoading;
@@ -354,6 +355,25 @@ export default function Chatbot() {
 
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
   }, [messages, isOpen, hasStartedConversation, isLoading]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      !hasStartedConversation ||
+      isLoading ||
+      showEndConfirmation
+    ) {
+      return;
+    }
+
+    inputRef.current?.focus();
+  }, [
+    isOpen,
+    hasStartedConversation,
+    isLoading,
+    messages.length,
+    showEndConfirmation,
+  ]);
 
   const getCurrentSessionId = () => {
     const savedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -376,20 +396,17 @@ export default function Chatbot() {
     setMessages([]);
     setInput("");
     setHasStartedConversation(false);
-    setShowStarterActions(false);
     setShowEndConfirmation(false);
   };
 
   const handleStartConversation = () => {
     setHasStartedConversation(true);
-    setShowStarterActions(false);
     setShowEndConfirmation(false);
   };
 
   const handleBackToIntro = () => {
     setInput("");
     setHasStartedConversation(false);
-    setShowStarterActions(false);
     setShowEndConfirmation(false);
   };
 
@@ -401,31 +418,13 @@ export default function Chatbot() {
     }
 
     const currentSessionId = getCurrentSessionId();
-    const isFirstMessage = messages.length === 0;
     setHasStartedConversation(true);
-    setShowStarterActions(false);
     setShowEndConfirmation(false);
 
     const chatWithUserMessage: Message[] = [
       ...messages,
       { role: "user", text: userMessage },
     ];
-
-    if (isFirstMessage && isConversationStarterMessage(userMessage)) {
-      setMessages(chatWithUserMessage);
-      setInput("");
-      setIsLoading(true);
-
-      await wait(BOT_RESPONSE_DELAY_MS);
-
-      setMessages([
-        ...chatWithUserMessage,
-        { role: "bot", text: STARTER_WELCOME_MESSAGE },
-      ]);
-      setIsLoading(false);
-      setShowStarterActions(true);
-      return;
-    }
 
     setMessages(chatWithUserMessage);
     setInput("");
@@ -448,14 +447,16 @@ export default function Chatbot() {
         throw new Error("Chatbot request failed");
       }
 
-      const data = (await response.json()) as { reply?: string };
+      const data = (await response.json()) as ChatApiResponse;
       const botReply = data.reply ?? ERROR_MESSAGE;
+      const quickActions = data.quick_actions ?? [];
+      const chatId = typeof data.chat_id === "number" ? data.chat_id : undefined;
 
       await minimumResponseDelay;
 
       setMessages([
         ...chatWithUserMessage,
-        { role: "bot", text: botReply },
+        { role: "bot", text: botReply, quickActions, chatId },
       ]);
     } catch {
       await minimumResponseDelay;
@@ -474,7 +475,74 @@ export default function Chatbot() {
     await sendMessage(input);
   };
 
-  const renderStarterActionButton = (action: string) => (
+  const handleFeedback = async (
+    messageIndex: number,
+    feedback: FeedbackValue,
+  ) => {
+    const message = messages[messageIndex];
+
+    if (message?.role !== "bot" || !message.chatId) {
+      return;
+    }
+
+    const chatId = message.chatId;
+    const sessionId = getCurrentSessionId();
+
+    setMessages((currentMessages) =>
+      currentMessages.map((currentMessage, index) =>
+        index === messageIndex
+          ? {
+              ...currentMessage,
+              feedback,
+              feedbackStatus: "saving",
+            }
+          : currentMessage,
+      ),
+    );
+
+    try {
+      const response = await fetch(CHATBOT_FEEDBACK_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          session_id: sessionId,
+          feedback,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Feedback request failed");
+      }
+
+      setMessages((currentMessages) =>
+        currentMessages.map((currentMessage, index) =>
+          index === messageIndex
+            ? {
+                ...currentMessage,
+                feedback,
+                feedbackStatus: "saved",
+              }
+            : currentMessage,
+        ),
+      );
+    } catch {
+      setMessages((currentMessages) =>
+        currentMessages.map((currentMessage, index) =>
+          index === messageIndex
+            ? {
+                ...currentMessage,
+                feedbackStatus: "error",
+              }
+            : currentMessage,
+        ),
+      );
+    }
+  };
+
+  const renderQuickActionButton = (action: string) => (
     <button
       key={action}
       type="button"
@@ -487,6 +555,60 @@ export default function Chatbot() {
       {action}
     </button>
   );
+
+  const renderFeedbackButton = (
+    label: string,
+    feedback: FeedbackValue,
+    message: Message,
+    messageIndex: number,
+  ) => {
+    const isSelected = message.feedback === feedback;
+    const isSaving = message.feedbackStatus === "saving";
+
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          void handleFeedback(messageIndex, feedback);
+        }}
+        disabled={isSaving}
+        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+          isSelected
+            ? "border-[#006A4E] bg-[#006A4E] text-white"
+            : "border-[#006A4E]/20 bg-white text-[#006A4E] hover:bg-[#006A4E]/5"
+        }`}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  const renderFeedbackControls = (message: Message, messageIndex: number) => {
+    if (!shouldShowFeedback(message)) {
+      return null;
+    }
+
+    return (
+      <div className="mt-2 flex max-w-[92%] flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-gray-500">Was this helpful?</span>
+        {renderFeedbackButton("Helpful", "helpful", message, messageIndex)}
+        {renderFeedbackButton(
+          "Not helpful",
+          "not_helpful",
+          message,
+          messageIndex,
+        )}
+        {message.feedbackStatus === "saved" ? (
+          <span className="text-xs font-medium text-[#006A4E]">Saved</span>
+        ) : null}
+        {message.feedbackStatus === "error" ? (
+          <span className="text-xs font-medium text-red-600">
+            Could not save
+          </span>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderTypingIndicator = () => (
     <div
@@ -615,16 +737,18 @@ export default function Chatbot() {
                       >
                         {renderMessageContent(message.text)}
                       </div>
+                      {renderFeedbackControls(message, index)}
+                      {message.role === "bot" &&
+                      message.quickActions &&
+                      message.quickActions.length > 0 ? (
+                        <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">
+                          {message.quickActions.map(renderQuickActionButton)}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
 
                   {isLoading ? renderTypingIndicator() : null}
-
-                  {showStarterActions ? (
-                    <div className="flex max-w-[92%] flex-wrap gap-2 pt-1">
-                      {STARTER_QUICK_ACTIONS.map(renderStarterActionButton)}
-                    </div>
-                  ) : null}
                 </div>
 
                 <form
@@ -632,6 +756,7 @@ export default function Chatbot() {
                   className="mt-4 flex items-center gap-3"
                 >
                   <input
+                    ref={inputRef}
                     type="text"
                     value={input}
                     onChange={(event) => setInput(event.target.value)}

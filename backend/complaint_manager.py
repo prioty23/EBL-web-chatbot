@@ -1,5 +1,7 @@
 import re
 
+from language_support import expand_bangla_banglish_text
+
 
 DIRECT_COMPLAINT_TERMS = [
     "complaint",
@@ -100,21 +102,22 @@ BANKING_CONTEXT_TERMS = [
 
 
 def contains_any(message, keywords):
+    message = expand_bangla_banglish_text(message).lower()
     return any(keyword in message for keyword in keywords)
 
 
 def has_issue_indicator(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
     return contains_any(message, ISSUE_INDICATORS)
 
 
 def has_banking_context(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
     return contains_any(message, BANKING_CONTEXT_TERMS)
 
 
 def looks_like_customer_issue(message):
-    message = message.lower().strip()
+    message = expand_bangla_banglish_text(message).lower().strip()
 
     return (
         contains_any(message, DIRECT_COMPLAINT_TERMS)
@@ -123,13 +126,13 @@ def looks_like_customer_issue(message):
 
 
 def has_specific_complaint_details(message):
-    message = message.lower().strip()
+    message = expand_bangla_banglish_text(message).lower().strip()
 
     return has_issue_indicator(message) and has_banking_context(message)
 
 
 def is_deposit_not_credited_issue(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
 
     deposit_words = [
         "deposit",
@@ -153,7 +156,7 @@ def is_deposit_not_credited_issue(message):
 
 
 def has_enough_complaint_details(message):
-    message = message.lower().strip()
+    message = expand_bangla_banglish_text(message).lower().strip()
 
     if len(message.split()) < 2:
         return False
@@ -162,7 +165,7 @@ def has_enough_complaint_details(message):
 
 
 def get_issue_type(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
 
     if is_deposit_not_credited_issue(message):
         return "Deposit Not Credited Issue"
@@ -262,7 +265,7 @@ def build_missing_complaint_id_reply():
 
 
 def is_complaint_confirmation_yes(message):
-    message = message.lower().strip()
+    message = expand_bangla_banglish_text(message).lower().strip()
 
     yes_exact_words = [
         "yes",
@@ -297,7 +300,7 @@ def is_complaint_confirmation_yes(message):
 
 
 def is_complaint_confirmation_no(message):
-    message = message.lower().strip()
+    message = expand_bangla_banglish_text(message).lower().strip()
 
     no_exact_words = [
         "no",

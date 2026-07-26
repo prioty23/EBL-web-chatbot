@@ -8,13 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import (
     ChatRequest,
+    ChatFeedbackRequest,
     ChatResponse,
     ComplaintStatusUpdateRequest,
 )
+
 from email_sender import send_final_status_email
 from complaint_email_scheduler import start_complaint_email_scheduler
 
 from safety import contains_sensitive_data, get_safety_response
+
+from language_support import expand_bangla_banglish_text
 
 from groq_client import (
     generate_groq_customer_service_reply,
@@ -32,6 +36,7 @@ from database import (
     get_session_summary,
     save_session_summary,
     save_complaint,
+    save_chat_feedback,
     get_complaint_by_id,
     update_complaint_status,
     get_recent_user_messages,
@@ -95,6 +100,7 @@ from deposit_rate_database import (
     ensure_deposit_rate_database_ready,
     import_deposit_rate_csvs,
     is_deposit_rate_question,
+    query_mentions_known_deposit_rate_product,
 )
 
 from lending_rate_database import (
@@ -158,6 +164,83 @@ CHARGE_CONTEXT_LIMIT = 3600
 CHARGE_LOCAL_SNIPPET_LIMIT = 2600
 SESSION_SUMMARY_LIMIT = 800
 LOAN_CATEGORY_QUESTION = "Do you want to know about SME or Retail loans?"
+MAIN_QUICK_ACTIONS = [
+    "Open an Account",
+    "Loan Information",
+    "Card Support",
+    "Schedule of Charges",
+]
+SCHEDULE_CHARGE_QUICK_ACTIONS = [
+    "Retail Charges",
+    "SME Charges",
+    "Corporate Charges",
+    "Card Charges",
+]
+INTEREST_RATE_QUICK_ACTIONS = [
+    "Deposit Rate",
+    "Lending Rate",
+]
+LOAN_SEGMENT_QUICK_ACTIONS = [
+    "Retail Loans",
+    "SME Loans",
+]
+ACCOUNT_SEGMENT_QUICK_ACTIONS = [
+    "Retail Account",
+    "SME Account",
+    "Islamic Account",
+]
+CARD_CATEGORY_QUICK_ACTIONS = [
+    "Debit Card",
+    "Credit Card",
+    "Prepaid Card",
+    "Islamic Card",
+]
+DEPOSIT_RATE_QUICK_ACTIONS = [
+    "Savings Account rate",
+    "Retail FD rate",
+    "DPS rate",
+    "EBL Confidence rate",
+    "EBL Kotipoti rate",
+    "Retail EBL Super 360 Days rate",
+]
+LENDING_RATE_QUICK_ACTIONS = [
+    "Home Loan rate",
+    "Personal Loan rate",
+    "SME Loan rate",
+    "Credit Cards rate",
+    "Food Items rate",
+    "Cattle Feeds rate",
+]
+CHARGE_PROMPT_QUICK_ACTIONS = {
+    "retail": [
+        "Retail account maintenance fee",
+        "Retail cheque book fee",
+        "Retail locker fees",
+        "Retail home loan processing fee",
+        "Retail cash withdrawal fee",
+    ],
+    "sme": [
+        "SME account maintenance fee",
+        "SME cheque book fee",
+        "SME PIN change charge",
+        "SME loan processing fee",
+        "SME cash withdrawal fee",
+    ],
+    "corporate": [
+        "Corporate account maintenance fee",
+        "Corporate pay order charge",
+        "Corporate RTGS charge",
+        "Corporate SWIFT charge",
+        "Corporate cash withdrawal fee",
+    ],
+    "cards": [
+        "Card annual fee",
+        "Card replacement fee",
+        "PIN replacement fee",
+        "Cash withdrawal fee",
+        "Supplementary card fee",
+    ],
+}
 
 
 LOAN_CATEGORY_SCHEDULES = {
@@ -1282,6 +1365,8 @@ def is_document_question(message):
 
 
 def contains_any_word(message, words):
+    message = expand_bangla_banglish_text(message).lower()
+
     for word in words:
         if word in message:
             return True
@@ -1290,6 +1375,7 @@ def contains_any_word(message, words):
 
 
 def normalize_menu_text(message):
+    message = expand_bangla_banglish_text(message)
     cleaned_text = "".join(
         character.lower() if character.isalnum() else " "
         for character in message
@@ -1301,17 +1387,38 @@ def normalize_menu_text(message):
 def is_schedule_charges_menu_request(message):
     normalized_message = normalize_menu_text(message)
 
-    return normalized_message in {
+    return (
+        normalized_message in {
         "schedule of charges",
         "charges schedule",
         "schedule charges",
         "banking charges",
         "banking charge",
     }
+        or "schedule of charges" in normalized_message
+    )
 
 
 def get_schedule_charge_category(message):
     normalized_message = normalize_menu_text(message)
+    normalized_words = set(normalized_message.split())
+    specific_charge_words = {
+        "activation",
+        "annual",
+        "atm",
+        "book",
+        "cash",
+        "cheque",
+        "closing",
+        "maintenance",
+        "pin",
+        "processing",
+        "replacement",
+        "supplementary",
+        "swift",
+        "transfer",
+        "withdrawal",
+    }
     category_aliases = {
         "retail": {
             "retail",
@@ -1351,6 +1458,24 @@ def get_schedule_charge_category(message):
         if normalized_message in aliases:
             return category
 
+    if not normalized_words & {"charge", "charges", "fee", "fees", "schedule"}:
+        return ""
+
+    if normalized_words & specific_charge_words:
+        return ""
+
+    if "retail" in normalized_words:
+        return "retail"
+
+    if "sme" in normalized_words:
+        return "sme"
+
+    if normalized_words & {"corporate", "corp"}:
+        return "corporate"
+
+    if normalized_words & {"card", "cards"}:
+        return "cards"
+
     return ""
 
 
@@ -1375,14 +1500,25 @@ def last_reply_was_schedule_charges_menu(session_id):
 
 
 def is_bare_schedule_charge_category(message):
-    return normalize_menu_text(message) in {
+    normalized_message = normalize_menu_text(message)
+    words = set(normalized_message.split())
+
+    if normalized_message in {
         "retail",
         "sme",
         "corp",
         "corporate",
         "card",
         "cards",
-    }
+    }:
+        return True
+
+    if words & {"account", "accounts", "loan", "loans", "charge", "charges", "fee", "fees", "support"}:
+        return False
+
+    return bool(
+        words & {"retail", "sme", "corp", "corporate", "card", "cards"}
+    )
 
 
 def last_assistant_reply(session_id, limit=6):
@@ -1417,6 +1553,31 @@ def last_reply_was_schedule_charge_prompt(session_id):
     )
 
 
+def schedule_from_charge_prompt(reply):
+    if reply.startswith("Which specific Retail charge"):
+        return "retail"
+
+    if reply.startswith("Which specific SME charge"):
+        return "sme"
+
+    if reply.startswith("Which specific Corporate charge"):
+        return "corporate"
+
+    if reply.startswith("Which specific Cards charge"):
+        return "cards"
+
+    return ""
+
+
+def last_reply_was_charge_clarification_prompt(session_id):
+    reply = last_assistant_reply(session_id).lower()
+
+    return (
+        reply.startswith("please specify the product/account type:")
+        or reply.startswith("please specify the exact charge:")
+    )
+
+
 def is_charge_condition_follow_up(message):
     normalized_message = normalize_menu_text(message)
 
@@ -1441,6 +1602,55 @@ def is_charge_condition_follow_up(message):
     ) or any(word.isdigit() for word in normalized_message.split())
 
 
+def is_charge_product_follow_up(message):
+    words = normalized_word_set(message)
+
+    return bool(
+        words
+        & {
+            "account",
+            "accounts",
+            "bank",
+            "card",
+            "cards",
+            "corp",
+            "corporate",
+            "customer",
+            "customers",
+            "ebl",
+            "other",
+            "retail",
+            "sme",
+        }
+    )
+
+
+def is_primary_navigation_message(message):
+    normalized_message = normalize_menu_text(message)
+
+    if is_fee_or_charge_question(message):
+        return False
+
+    return normalized_message in {
+        "open an account",
+        "loan information",
+        "card support",
+        "interest rate",
+        "interest rates",
+        "retail loan",
+        "retail loans",
+        "sme loan",
+        "sme loans",
+        "retail account",
+        "sme account",
+        "islamic account",
+        "debit card",
+        "credit card",
+        "prepaid card",
+        "islamic card",
+    }
+
+
 def last_reply_looks_like_charge_answer(session_id):
     reply = last_assistant_reply(session_id).lower()
 
@@ -1455,7 +1665,14 @@ def last_reply_looks_like_charge_answer(session_id):
 
 
 def build_contextual_charge_query(session_id, user_message):
+    if is_primary_navigation_message(user_message):
+        return ""
+
+    if is_specific_card_product_information_request(user_message):
+        return ""
+
     previous_user_message = last_user_message(session_id)
+    previous_assistant_reply = last_assistant_reply(session_id)
 
     if (
         previous_user_message
@@ -1468,7 +1685,25 @@ def build_contextual_charge_query(session_id, user_message):
     ):
         return f"{previous_user_message} {user_message}"
 
+    if last_reply_was_charge_clarification_prompt(session_id):
+        if previous_user_message:
+            return f"{previous_user_message} {user_message}"
+
+        return user_message
+
+    if (
+        last_reply_looks_like_charge_answer(session_id)
+        and not is_fee_or_charge_question(user_message)
+        and is_charge_product_follow_up(user_message)
+    ):
+        return user_message
+
     if last_reply_was_schedule_charge_prompt(session_id):
+        schedule_context = schedule_from_charge_prompt(previous_assistant_reply)
+
+        if schedule_context:
+            return f"{schedule_context} {user_message}"
+
         return user_message
 
     return ""
@@ -1479,6 +1714,42 @@ def get_bare_banking_segment(message):
 
     if normalized_message in ["retail", "sme", "islamic"]:
         return normalized_message
+
+    words = set(normalized_message.split())
+
+    if words & {
+        "account",
+        "accounts",
+        "card",
+        "cards",
+        "charge",
+        "charges",
+        "deposit",
+        "deposits",
+        "dps",
+        "fd",
+        "fdr",
+        "fee",
+        "fees",
+        "fixed",
+        "loan",
+        "loans",
+        "rate",
+        "rates",
+        "recurring",
+        "saving",
+        "savings",
+    }:
+        return ""
+
+    if "retail" in words:
+        return "retail"
+
+    if "sme" in words:
+        return "sme"
+
+    if "islamic" in words:
+        return "islamic"
 
     return ""
 
@@ -1578,7 +1849,10 @@ def has_lending_rate_context(message):
 
 
 def has_specific_deposit_rate_context(message):
-    words = normalized_word_set(message)
+    words = {
+        word for word in normalized_word_set(message)
+        if word.isascii()
+    }
     generic_words = {
         "about",
         "bank",
@@ -1591,8 +1865,10 @@ def has_specific_deposit_rate_context(message):
         "i",
         "interest",
         "know",
+        "koto",
         "may",
         "me",
+        "much",
         "my",
         "of",
         "please",
@@ -1618,7 +1894,10 @@ def has_specific_deposit_rate_context(message):
 
 
 def has_specific_lending_rate_context(message):
-    words = normalized_word_set(message)
+    words = {
+        word for word in normalized_word_set(message)
+        if word.isascii()
+    }
     generic_words = {
         "about",
         "bank",
@@ -1631,8 +1910,10 @@ def has_specific_lending_rate_context(message):
         "i",
         "interest",
         "know",
+        "koto",
         "may",
         "me",
+        "much",
         "my",
         "of",
         "please",
@@ -1713,9 +1994,29 @@ def last_reply_was_interest_rate_type_prompt(session_id):
 
 
 def last_reply_was_deposit_rate_product_prompt(session_id):
-    return last_assistant_reply(session_id).startswith(
+    last_reply = last_assistant_reply(session_id)
+
+    return (
+        last_reply.startswith(
         "Please specify the deposit product or category"
     )
+        or "product rate do you want?" in last_reply
+    )
+
+
+def deposit_rate_prompt_context(session_id):
+    last_reply = last_assistant_reply(session_id)
+
+    if "Savings/CASA product rate" in last_reply:
+        return "Retail"
+
+    if "Retail FD product rate" in last_reply:
+        return "Retail"
+
+    if "DPS/recurring deposit product rate" in last_reply:
+        return "Retail"
+
+    return ""
 
 
 def last_reply_was_lending_rate_product_prompt(session_id):
@@ -1803,9 +2104,12 @@ def build_interest_rate_flow_reply(session_id, user_message):
         if get_interest_rate_type_choice(user_message) == "lending":
             return LENDING_RATE_PRODUCT_REPLY
 
+        rate_context = deposit_rate_prompt_context(session_id)
+        rate_query = f"{rate_context} {user_message}".strip()
+
         return (
             answer_deposit_rate_question_from_db(
-                f"{user_message} deposit interest rate"
+                f"{rate_query} deposit interest rate"
             )
             or build_broad_rate_clarification()
         )
@@ -1878,13 +2182,41 @@ def looks_like_deposit_rate_product_name(message):
         or ("extra" in words and "value" in words and bool(words & {"fd", "fdr"}))
     )
 
+    if query_mentions_known_deposit_rate_product(message):
+        return True
+
     if not has_numeric_tenure and not has_rate_sheet_product_hint:
         return False
 
     return bool(words & {"ebl", "fd", "fdr", "fixed", "term", "super"})
 
 
-def build_deposit_rate_product_name_reply(user_message):
+def last_reply_is_account_product_selection_prompt(history):
+    for item in reversed(history or []):
+        if item.get("role") != "assistant":
+            continue
+
+        content = item.get("content", "").lower()
+
+        return (
+            "which retail account category" in content
+            or "which sme account category" in content
+            or "which islamic account category" in content
+            or "please tell me the specific account name" in content
+            or (
+                "please tell me the specific" in content
+                and "product name" in content
+                and "features and link" in content
+            )
+        )
+
+    return False
+
+
+def build_deposit_rate_product_name_reply(user_message, history=None):
+    if last_reply_is_account_product_selection_prompt(history):
+        return ""
+
     if not looks_like_deposit_rate_product_name(user_message):
         return ""
 
@@ -1902,6 +2234,8 @@ def is_fee_or_charge_question(message):
         "charge",
         "charges",
         "commission",
+        "remittance",
+        "inward",
         "schedule of charges",
         "vat",
         "maintenance fee",
@@ -1928,12 +2262,19 @@ def is_fee_or_charge_question(message):
         "solvency certificate",
         "standing instruction",
         "swift",
-        "card interest rate",
-        "credit card interest",
-        "interest rate",
+        "inward remittance",
     ]
 
     return contains_any_word(message, charge_words + fee_service_phrases)
+
+
+def build_charge_not_found_reply():
+    return (
+        "I could not find an exact match in the EBL Schedule of Charges. "
+        "Please mention the schedule type, product/account type, and charge name "
+        "for example Retail locker lost key replacement fee, SME inward remittance "
+        "for other bank customer, or Cards replacement fee."
+    )
 
 
 def has_document_word(message, include_need=True):
@@ -2164,6 +2505,7 @@ def build_required_documents_reply(user_message, website_info, product_name="", 
 
 
 def normalize_loan_lookup_text(text):
+    text = expand_bangla_banglish_text(text)
     text = text.lower()
 
     replacements = {
@@ -3846,12 +4188,227 @@ def should_skip_card_feature_line(line, product_name):
     ]
 
 
-def build_card_feature_bullets(section_text, product_name, max_bullets=8):
+def summarize_card_feature_line(line):
+    line = clean_loan_line(line)
+
+    if not line:
+        return ""
+
+    if ":" in line:
+        line = line.split(":", 1)[0].strip()
+
+    if " please visit" in line.lower():
+        return ""
+
+    if line.lower().startswith("for airport"):
+        return ""
+
+    return line.strip(" -")
+
+
+def summarize_card_feature_detail(feature_line, detail_line):
+    feature_text = normalize_loan_lookup_text(feature_line)
+    detail_line = clean_loan_line(detail_line).lstrip(": ")
+
+    if "zero issuance" in feature_text:
+        return "Zero issuance fee for eligible cardholders."
+
+    if "zero renewal" in feature_text:
+        return "Renewal fee can be waived when the required yearly transactions are completed."
+
+    if "contactless" in feature_text:
+        return "Tap-to-pay contactless transactions are supported."
+
+    if "revolving" in feature_text:
+        return "Flexible revolving credit facility is available."
+
+    if "onetime" in feature_text or "lifetime free" in feature_text:
+        return "Annual fee benefit applies when the required yearly transactions are completed."
+
+    if "global currency" in feature_text:
+        return "Local and foreign currency usage is supported as per card terms."
+
+    if "skylounge" in feature_text or ("sky" in feature_text and "lounge" in feature_text):
+        return "Complimentary EBL SKYLOUNGE access as per card benefits."
+
+    if "global lounge" in feature_text or "vip airport lounge" in feature_text:
+        return "Global lounge access is available as per schedule of charges."
+
+    if "priority pass" in feature_text:
+        return "Priority Pass lounge access is available; charges may apply."
+
+    if "meet" in feature_text and "greet" in feature_text:
+        return "Airport Meet & Greet fast-track service is available with advance booking."
+
+    if "risk assurance" in feature_text or "insurance" in feature_text:
+        return "Risk assurance coverage applies as per card terms."
+
+    if "interest free" in feature_text:
+        return "Up to 45 days interest-free period on eligible transactions."
+
+    if "cash advance" in feature_text:
+        return "Cash advance facility is available through eligible channels."
+
+    if "auto debit" in feature_text:
+        return "Automatic payment from an EBL account can be set up."
+
+    if "discount" in feature_text:
+        return "Discounts are available at selected EBL partner merchants."
+
+    if "installment" in feature_text or "emi" in feature_text:
+        return "Eligible transactions can be converted into installment plans."
+
+    if "zip" in feature_text and "easycredit" in feature_text:
+        return "ZIP and EasyCredit installment facilities are available."
+
+    if "zip" in feature_text:
+        return "Interest-free installment plans are available at partner merchant outlets."
+
+    if "easycredit" in feature_text:
+        return "Eligible card limit can be used for transfer or pay order through EMI."
+
+    if "supplementary" in feature_text:
+        return "Supplementary card facility is available as per card terms."
+
+    if "payment" in feature_text:
+        return "Flexible payment options are available through EBL channels."
+
+    if "contact center" in feature_text or "contact centre" in feature_text:
+        return "24-hour card support is available through EBL Contact Center."
+
+    if not detail_line:
+        return ""
+
+    lower_detail = detail_line.lower()
+
+    if lower_detail.startswith(("http", "www.")):
+        return ""
+
+    if lower_detail.startswith(("for airport", "please visit")):
+        return ""
+
+    if should_stop_card_feature_collection(detail_line):
+        return ""
+
+    first_sentence = re.split(r"(?<=[.!?])\s+", detail_line, maxsplit=1)[0].strip()
+    first_sentence = first_sentence.rstrip(".")
+
+    if len(first_sentence) > 130:
+        words = first_sentence.split()
+        trimmed_words = []
+
+        for word in words:
+            candidate = " ".join(trimmed_words + [word])
+
+            if len(candidate) > 120:
+                break
+
+            trimmed_words.append(word)
+
+        first_sentence = " ".join(trimmed_words).rstrip(",;:")
+
+    if not first_sentence:
+        return ""
+
+    return f"{first_sentence}."
+
+
+def is_card_feature_detail_sentence(line):
+    lower_line = f" {line.lower()} "
+
+    if line.endswith((".", "!", "?", "।")):
+        return True
+
+    detail_phrases = [
+        " any ",
+        " are ",
+        " can ",
+        " comes ",
+        " eligible ",
+        " entitled ",
+        " gives ",
+        " has ",
+        " have ",
+        " need ",
+        " needs ",
+        " offers ",
+        " paid ",
+        " there ",
+        " where ",
+        " whenever ",
+        " will ",
+        " you ",
+        " your ",
+    ]
+
+    return len(line.split()) > 8 and any(phrase in lower_line for phrase in detail_phrases)
+
+
+def is_main_card_feature_line(line):
+    if not line:
+        return False
+
+    lower_line = line.lower()
+
+    if lower_line.startswith(("http", "www.")):
+        return False
+
+    if len(line) > 95:
+        return False
+
+    if is_card_feature_detail_sentence(line):
+        return False
+
+    feature_keywords = {
+        "access",
+        "airport",
+        "assurance",
+        "auto",
+        "bonus",
+        "cashback",
+        "cash",
+        "complimentary",
+        "currency",
+        "discount",
+        "easycredit",
+        "emi",
+        "fee",
+        "free",
+        "global",
+        "insurance",
+        "issuance",
+        "lounge",
+        "meet",
+        "offer",
+        "pass",
+        "points",
+        "program",
+        "renewal",
+        "reward",
+        "revolving",
+        "risk",
+        "sky",
+        "skylounge",
+        "supplementary",
+        "zip",
+        "zero",
+    }
+
+    line_words = set(normalize_loan_lookup_text(line).split())
+
+    if line_words & feature_keywords:
+        return True
+
+    return len(line.split()) <= 6 and line[:1].isupper()
+
+
+def build_card_feature_bullets(section_text, product_name, max_bullets=6):
     raw_lines = section_text.splitlines()
     lines = [clean_loan_line(line) for line in raw_lines]
     lines = [line for line in lines if line]
 
     bullets = []
+    seen_bullets = set()
     index = 0
 
     while index < len(lines):
@@ -3864,24 +4421,53 @@ def build_card_feature_bullets(section_text, product_name, max_bullets=8):
             index += 1
             continue
 
-        next_line = lines[index + 1] if index + 1 < len(lines) else ""
+        feature_line = summarize_card_feature_line(line)
 
-        if (
-            next_line
-            and not should_stop_card_feature_collection(next_line)
-            and not should_skip_card_feature_line(next_line, product_name)
-            and len(line) <= 80
-            and len(next_line) > 45
-            and (line.endswith(":") or "." in next_line)
-        ):
-            bullets.append(f"{line.rstrip(':')}: {next_line}")
-            index += 2
-        else:
-            bullets.append(line)
+        if not is_main_card_feature_line(feature_line):
             index += 1
+            continue
+
+        normalized_feature = normalize_loan_lookup_text(feature_line)
+
+        if normalized_feature in seen_bullets:
+            index += 1
+            continue
+
+        detail_line = ""
+        next_index = index + 1
+
+        while next_index < len(lines):
+            candidate_line = lines[next_index]
+
+            if should_stop_card_feature_collection(candidate_line):
+                break
+
+            if should_skip_card_feature_line(candidate_line, product_name):
+                next_index += 1
+                continue
+
+            candidate_feature = summarize_card_feature_line(candidate_line)
+
+            if is_main_card_feature_line(candidate_feature):
+                break
+
+            detail_line = candidate_line
+            break
+
+        feature_detail = summarize_card_feature_detail(feature_line, detail_line)
+        bullet = (
+            f"{feature_line}: {feature_detail}"
+            if feature_detail
+            else feature_line
+        )
+
+        seen_bullets.add(normalized_feature)
+        bullets.append(bullet)
 
         if len(bullets) >= max_bullets:
             break
+
+        index += 1
 
     return bullets
 
@@ -3928,6 +4514,14 @@ def build_card_router_reply(user_message, intent, history):
         return build_card_category_reply(category)
 
     return ""
+
+
+def is_specific_card_product_information_request(message):
+    return bool(
+        detect_specific_card_product(message)
+        and not is_fee_or_charge_question(message)
+        and not has_rate_word(message)
+    )
 
 
 DISCOVERY_SOURCES = [
@@ -4316,11 +4910,191 @@ WEBSITE_PAGES = [
 ]
 
 
-def build_response(reply, source, blocked=False):
+def unique_quick_actions(actions, limit=30):
+    unique_actions = []
+
+    for action in actions:
+        clean_action = " ".join((action or "").strip().split())
+
+        if clean_action and clean_action not in unique_actions:
+            unique_actions.append(clean_action)
+
+        if len(unique_actions) >= limit:
+            break
+
+    return unique_actions
+
+
+def extract_bullet_quick_actions(reply, limit=8):
+    actions = []
+
+    for line in reply.splitlines():
+        clean_line = line.strip()
+
+        if not clean_line.startswith("- "):
+            continue
+
+        action = clean_line[2:].strip()
+
+        if not action or ":" in action or "http" in action.lower():
+            continue
+
+        actions.append(action)
+
+    return unique_quick_actions(actions, limit=limit)
+
+
+def build_quick_actions(reply, source):
+    if not reply:
+        return []
+
+    if source in {"greeting-handler", "identity-handler"}:
+        return MAIN_QUICK_ACTIONS
+
+    if reply == SCHEDULE_CHARGES_MENU_REPLY:
+        return SCHEDULE_CHARGE_QUICK_ACTIONS
+
+    if reply == INTEREST_RATE_TYPE_REPLY:
+        return INTEREST_RATE_QUICK_ACTIONS
+
+    if reply == LOAN_CATEGORY_QUESTION:
+        return LOAN_SEGMENT_QUICK_ACTIONS
+
+    if reply == ACCOUNT_CATEGORY_QUESTION:
+        return ACCOUNT_SEGMENT_QUICK_ACTIONS
+
+    if reply == CARD_CATEGORY_QUESTION:
+        return CARD_CATEGORY_QUICK_ACTIONS
+
+    if reply == LENDING_RATE_PRODUCT_REPLY:
+        return []
+
+    if reply.startswith("Which specific Retail charge"):
+        return CHARGE_PROMPT_QUICK_ACTIONS["retail"]
+
+    if reply.startswith("Which specific SME charge"):
+        return CHARGE_PROMPT_QUICK_ACTIONS["sme"]
+
+    if reply.startswith("Which specific Corporate charge"):
+        return CHARGE_PROMPT_QUICK_ACTIONS["corporate"]
+
+    if reply.startswith("Which specific Cards charge"):
+        return CHARGE_PROMPT_QUICK_ACTIONS["cards"]
+
+    if reply.startswith("Please specify the exact charge:"):
+        return extract_bullet_quick_actions(
+            "- " + reply.split(":", 1)[1].replace(", ", "\n- ").rstrip("."),
+            limit=6,
+        )
+
+    if reply.startswith("Please specify the product/account type:"):
+        return extract_bullet_quick_actions(
+            "- " + reply.split(":", 1)[1].replace(", ", "\n- ").rstrip("."),
+            limit=6,
+        )
+
+    if reply.startswith("Please specify the deposit product"):
+        return []
+
+    if (
+        "product rate do you want?" in reply
+        and source in {"deposit-rate-database", "interest-rate-router"}
+    ):
+        return []
+
+    if reply.startswith("Which Retail loan category"):
+        return unique_quick_actions(get_loan_categories("Retail"), limit=8)
+
+    if reply.startswith("Which Retail account category"):
+        return unique_quick_actions(get_account_categories("Retail"), limit=8)
+
+    if reply.startswith("Which SME account category"):
+        return unique_quick_actions(get_account_categories("SME"), limit=8)
+
+    if (
+        source in {"account-router", "loan-router", "card-router"}
+        and (
+            "options include:" in reply
+            or "accounts include:" in reply
+            or "Please tell me the specific" in reply
+        )
+    ):
+        return extract_bullet_quick_actions(reply, limit=30)
+
+    return []
+
+
+def strip_quick_action_bullets(reply, quick_actions):
+    if not quick_actions:
+        return reply
+
+    quick_action_set = set(quick_actions)
+    kept_lines = []
+
+    for line in reply.splitlines():
+        clean_line = line.strip()
+
+        if clean_line.startswith("- ") and clean_line[2:].strip() in quick_action_set:
+            continue
+
+        kept_lines.append(line)
+
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines)).strip()
+
+
+def display_reply_for_quick_actions(reply, quick_actions):
+    if not quick_actions:
+        return reply
+
+    if reply == SCHEDULE_CHARGES_MENU_REPLY:
+        return "Which banking charge do you want to know?"
+
+    if reply == INTEREST_RATE_TYPE_REPLY:
+        return "Which interest rate do you want to know?"
+
+    if reply == LOAN_CATEGORY_QUESTION:
+        return "Which loan type do you want to know?"
+
+    if reply == ACCOUNT_CATEGORY_QUESTION:
+        return "Which account type do you want to open or know about?"
+
+    if reply == CARD_CATEGORY_QUESTION:
+        return "Which EBL card type do you want to know about?"
+
+    if reply == LENDING_RATE_PRODUCT_REPLY:
+        return "Which lending product rate do you want to know?"
+
+    if reply.startswith("Which specific Retail charge"):
+        return "Which specific Retail charge do you want to know?"
+
+    if reply.startswith("Which specific SME charge"):
+        return "Which specific SME charge do you want to know?"
+
+    if reply.startswith("Which specific Corporate charge"):
+        return "Which specific Corporate charge do you want to know?"
+
+    if reply.startswith("Which specific Cards charge"):
+        return "Which specific Card charge do you want to know?"
+
+    if reply.startswith("Please specify the exact charge:"):
+        return "Please specify the exact charge."
+
+    if reply.startswith("Please specify the product/account type:"):
+        return "Please specify the product/account type."
+
+    if reply.startswith("Please specify the deposit product"):
+        return "Please specify the deposit product or category."
+
+    return strip_quick_action_bullets(reply, quick_actions)
+
+
+def build_response(reply, source, blocked=False, quick_actions=None, chat_id=None):
     return ChatResponse(
         reply=reply,
         source=source,
         blocked=blocked,
+        quick_actions=quick_actions or [],
+        chat_id=chat_id,
     )
 
 
@@ -4331,8 +5105,18 @@ def save_and_build_response(
     source,
     status,
     blocked=False,
+    quick_actions=None,
 ):
-    save_chat(
+    response_quick_actions = []
+
+    if not blocked:
+        response_quick_actions = unique_quick_actions(
+            quick_actions
+            if quick_actions is not None
+            else build_quick_actions(reply, source),
+        )
+
+    chat_id = save_chat(
         session_id=session_id,
         user_message=user_message,
         bot_reply=reply,
@@ -4341,7 +5125,15 @@ def save_and_build_response(
         status=status,
     )
 
-    return build_response(reply, source, blocked)
+    display_reply = display_reply_for_quick_actions(reply, response_quick_actions)
+
+    return build_response(
+        display_reply,
+        source,
+        blocked,
+        response_quick_actions,
+        chat_id,
+    )
 
 
 def update_summary_safely(session_id, session_summary, user_message, reply):
@@ -4356,6 +5148,11 @@ def update_summary_safely(session_id, session_summary, user_message, reply):
 
     except Exception:
         pass
+
+
+def safe_debug_print(label, value):
+    message = f"{label} {value!r}"
+    print(message.encode("ascii", "backslashreplace").decode("ascii"))
 
 
 app = FastAPI(
@@ -4433,6 +5230,15 @@ def chat(request: ChatRequest):
             status="answered",
         )
 
+    if is_greeting_only(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=get_greeting_reply(),
+            source="greeting-handler",
+            status="greeting",
+        )
+
     if is_schedule_charges_menu_request(user_message):
         return save_and_build_response(
             session_id=session_id,
@@ -4494,8 +5300,10 @@ def chat(request: ChatRequest):
             status="answered",
         )
 
+    deposit_product_history = get_chat_history(session_id, limit=4)
     deposit_rate_product_name_reply = build_deposit_rate_product_name_reply(
-        user_message
+        user_message,
+        deposit_product_history,
     )
 
     if deposit_rate_product_name_reply:
@@ -4507,16 +5315,14 @@ def chat(request: ChatRequest):
             status="answered",
         )
 
-    structured_lending_rate_reply = answer_lending_rate_question_from_db(
-        user_message
-    )
+    if is_specific_card_product_information_request(user_message):
+        specific_card_product = detect_specific_card_product(user_message)
 
-    if structured_lending_rate_reply:
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
-            reply=structured_lending_rate_reply,
-            source="lending-rate-database",
+            reply=build_specific_card_reply(specific_card_product),
+            source="card-router",
             status="answered",
         )
 
@@ -4538,7 +5344,10 @@ def chat(request: ChatRequest):
             )
 
     if is_fee_or_charge_question(user_message):
-        structured_fee_reply = answer_charge_question_from_db(user_message)
+        structured_fee_reply = answer_charge_question_from_db(
+            user_message,
+            allow_product_only=True,
+        )
 
         if structured_fee_reply:
             return save_and_build_response(
@@ -4549,19 +5358,29 @@ def chat(request: ChatRequest):
                 status="answered",
             )
 
-        direct_fee_reply = answer_local_fee_question(user_message)
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_charge_not_found_reply(),
+            source="charge-database",
+            status="not_found",
+        )
 
-        if direct_fee_reply:
-            return save_and_build_response(
-                session_id=session_id,
-                user_message=user_message,
-                reply=direct_fee_reply,
-                source="local-fee-knowledge",
-                status="answered",
-            )
+    structured_lending_rate_reply = answer_lending_rate_question_from_db(
+        user_message
+    )
+
+    if structured_lending_rate_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=structured_lending_rate_reply,
+            source="lending-rate-database",
+            status="answered",
+        )
 
     understood_query = understand_user_query_with_groq(user_message)
-    print("UNDERSTOOD QUERY:", understood_query)
+    safe_debug_print("UNDERSTOOD QUERY:", understood_query)
 
     intent = understood_query["intent"]
     search_query = understood_query["search_query"]
@@ -4897,7 +5716,8 @@ def chat(request: ChatRequest):
             )
 
         structured_fee_reply = answer_charge_question_from_db(
-            f"{user_message}\n{search_query}"
+            f"{user_message}\n{search_query}",
+            allow_product_only=True,
         )
 
         if structured_fee_reply:
@@ -4909,18 +5729,13 @@ def chat(request: ChatRequest):
                 status="answered",
             )
 
-        direct_fee_reply = answer_local_fee_question(
-            f"{user_message}\n{search_query}"
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_charge_not_found_reply(),
+            source="charge-database",
+            status="not_found",
         )
-
-        if direct_fee_reply:
-            return save_and_build_response(
-                session_id=session_id,
-                user_message=user_message,
-                reply=direct_fee_reply,
-                source="local-fee-knowledge",
-                status="answered",
-            )
 
     use_website_context = not (is_charge_query and local_knowledge_info)
     website_page_context_limit = (
@@ -5036,6 +5851,46 @@ def chat(request: ChatRequest):
     )
 
     return response
+
+
+def normalize_chat_feedback(feedback):
+    normalized_feedback = normalize_menu_text(feedback).replace(" ", "_")
+    feedback_aliases = {
+        "helpful": "helpful",
+        "not_helpful": "not_helpful",
+        "nothelpful": "not_helpful",
+    }
+
+    return feedback_aliases.get(normalized_feedback, "")
+
+
+@app.post("/chat/feedback")
+def submit_chat_feedback(request: ChatFeedbackRequest):
+    feedback = normalize_chat_feedback(request.feedback)
+
+    if not feedback:
+        raise HTTPException(
+            status_code=400,
+            detail="Feedback must be helpful or not_helpful.",
+        )
+
+    session_id = request.session_id or "default-session"
+    feedback_saved = save_chat_feedback(
+        chat_id=request.chat_id,
+        session_id=session_id,
+        feedback=feedback,
+    )
+
+    if not feedback_saved:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat response not found for this session.",
+        )
+
+    return {
+        "message": "Feedback saved",
+        "feedback": feedback,
+    }
 
 
 @app.post("/refresh-website-info")

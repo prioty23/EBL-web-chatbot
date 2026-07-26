@@ -5,6 +5,8 @@ import csv
 import re
 import sqlite3
 
+from language_support import expand_bangla_banglish_text
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "EBL_chatbot.db"
@@ -85,6 +87,7 @@ def build_account_search_text(row):
 
 
 def normalize_account_text(text):
+    text = expand_bangla_banglish_text(text)
     text = text.lower()
     text = text.replace("&", " and ")
     return " ".join(re.findall(r"[a-z0-9+]+", text))

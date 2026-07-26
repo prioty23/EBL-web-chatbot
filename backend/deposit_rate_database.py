@@ -5,6 +5,8 @@ import csv
 import re
 import sqlite3
 
+from language_support import expand_bangla_banglish_text
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "EBL_chatbot.db"
@@ -140,6 +142,7 @@ _READY = False
 
 
 def normalize_text(text):
+    text = expand_bangla_banglish_text(text)
     text = (text or "").lower()
     replacements = {
         "&": " and ",
@@ -445,6 +448,12 @@ def row_product_phrase_in_query(row, query):
     if product_phrase and f" {product_phrase} " in query_text:
         return True
 
+    query_words = set(expand_words(tokenize(query)))
+    product_words = set(expand_words(tokenize(row["product"])))
+
+    if product_words and product_words <= query_words:
+        return True
+
     product_parts = re.split(r"\s*/\s*|\s+-\s+", row["product"])
 
     for product_part in product_parts:
@@ -454,6 +463,51 @@ def row_product_phrase_in_query(row, query):
             return True
 
     return False
+
+
+def product_phrase_in_query(product, query):
+    query_text = f" {normalize_text(query)} "
+    product_phrase = normalize_text(product)
+
+    if not product_phrase:
+        return False
+
+    query_words = set(expand_words(tokenize(query)))
+    product_words = set(expand_words(tokenize(product)))
+
+    if product_words and product_words <= query_words:
+        return True
+
+    if len(product_phrase.split()) == 1 and "ebl" not in tokenize(query):
+        return False
+
+    if f" {product_phrase} " in query_text:
+        return True
+
+    product_parts = re.split(r"\s*/\s*|\s+-\s+", product)
+
+    for product_part in product_parts:
+        phrase = normalize_text(product_part)
+
+        if len(phrase.split()) < 2 and "ebl" not in tokenize(query):
+            continue
+
+        if phrase and len(phrase) > 3 and f" {phrase} " in query_text:
+            return True
+
+    return False
+
+
+def query_mentions_known_deposit_rate_product(query):
+    words = set(expand_words(tokenize(query)))
+
+    if not words or words & BLOCKED_RATE_CONTEXT_WORDS:
+        return False
+
+    return any(
+        product_phrase_in_query(product, query)
+        for product in get_all_products()
+    )
 
 
 def row_matches_requested_unit(row, units):
@@ -809,6 +863,84 @@ def build_product_clarification(rows):
     return f"Please specify the deposit product or tenure, for example: {examples}."
 
 
+def deposit_category_quick_action_type(query):
+    words = set(expand_words(tokenize(query)))
+
+    if not query_has_rate_terms(words):
+        return ""
+
+    if "dps" in words or "recurring" in words:
+        return "dps"
+
+    if "fd" in words or "fixed" in words or "fdr" in words:
+        return "retail_fd"
+
+    if words & {"saving", "savings", "casa"}:
+        return "savings"
+
+    return ""
+
+
+def get_products_for_deposit_category(category_type):
+    ensure_deposit_rate_database_ready()
+
+    filters = {
+        "savings": ("Retail", "CASA Products"),
+        "retail_fd": ("Retail", "Term Deposit"),
+        "dps": ("Retail", "Recurring Deposit"),
+    }
+    selected_filter = filters.get(category_type)
+
+    if not selected_filter:
+        return []
+
+    business_unit, category = selected_filter
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT product
+        FROM deposit_rates
+        WHERE business_unit = ?
+        AND category = ?
+        GROUP BY product
+        ORDER BY MIN(id)
+    """, (business_unit, category))
+    products = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return products
+
+
+def build_deposit_category_selection_reply(query):
+    if query_mentions_known_deposit_rate_product(query):
+        return ""
+
+    category_type = deposit_category_quick_action_type(query)
+
+    if not category_type:
+        return ""
+
+    label_by_type = {
+        "savings": "Savings/CASA",
+        "retail_fd": "Retail FD",
+        "dps": "DPS/recurring deposit",
+    }
+    products = get_products_for_deposit_category(category_type)
+
+    if not products:
+        return ""
+
+    product_lines = "\n".join(
+        f"- {product} rate"
+        for product in products
+    )
+
+    return (
+        f"Which {label_by_type[category_type]} product rate do you want?\n\n"
+        f"{product_lines}"
+    )
+
+
 def product_group_key(row):
     return normalize_text(row["product"])
 
@@ -921,6 +1053,11 @@ def answer_deposit_rate_question_from_db(query):
 
     if not is_deposit_rate_question(query):
         return ""
+
+    category_selection_reply = build_deposit_category_selection_reply(query)
+
+    if category_selection_reply:
+        return category_selection_reply
 
     rows = get_candidate_rows(query)
 

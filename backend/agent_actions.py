@@ -1,5 +1,8 @@
+from language_support import expand_bangla_banglish_text
+
+
 def get_contact_reply(message):
-    message = message.lower()
+    message = expand_bangla_banglish_text(message).lower()
 
     if "email" in message or "mail" in message:
         return "info@ebl-bd.com"

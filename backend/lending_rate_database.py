@@ -5,6 +5,8 @@ import csv
 import re
 import sqlite3
 
+from language_support import expand_bangla_banglish_text
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "EBL_chatbot.db"
@@ -41,6 +43,8 @@ GENERIC_LENDING_WORDS = {
     "bank",
     "banking",
     "can",
+    "customer",
+    "customers",
     "ebl",
     "eastern",
     "finance",
@@ -59,6 +63,8 @@ GENERIC_LENDING_WORDS = {
     "my",
     "of",
     "or",
+    "other",
+    "others",
     "please",
     "plc",
     "rate",
@@ -114,6 +120,7 @@ _READY = False
 
 
 def normalize_text(text):
+    text = expand_bangla_banglish_text(text)
     text = (text or "").lower()
     replacements = {
         "&": " and ",
@@ -854,7 +861,11 @@ def get_candidate_rows(query, limit=40):
 
     rows = get_all_lending_rate_rows()
 
-    exact_rows = rows_matching_exact_lending_purpose(rows, query)
+    exact_rows = (
+        rows_matching_exact_lending_purpose(rows, query)
+        if has_rate_terms(words)
+        else []
+    )
 
     if exact_rows:
         return exact_rows[:limit]
