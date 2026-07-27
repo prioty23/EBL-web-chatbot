@@ -98,6 +98,7 @@ from deposit_rate_database import (
     answer_deposit_rate_question_from_db,
     build_broad_rate_clarification,
     build_deposit_rate_menu_reply,
+    deposit_rate_followup_context,
     ensure_deposit_rate_database_ready,
     import_deposit_rate_csvs,
     is_deposit_rate_question,
@@ -2032,32 +2033,98 @@ def last_reply_was_deposit_rate_product_prompt(session_id):
     )
 
 
-def deposit_rate_prompt_context(session_id):
-    last_reply = last_assistant_reply(session_id)
-    timeline_match = re.search(r"Which (.+?) timeline do you want\?", last_reply)
+def strip_deposit_timeline_from_subject(subject):
+    return re.sub(
+        r"\s+\d+(?:\.\d+)?\s+(?:day|days|month|months|year|years)$",
+        "",
+        subject.strip(),
+        flags=re.IGNORECASE,
+    ).strip()
+
+
+def deposit_rate_context_from_reply(reply):
+    timeline_match = re.search(r"Which (.+?) timeline do you want\?", reply)
 
     if timeline_match:
         return timeline_match.group(1).strip()
 
-    if "Business Unit: Retail" in last_reply:
+    if "Business Unit: Retail" in reply:
         return "Retail"
 
-    if "Business Unit: Commercial" in last_reply:
+    if "Business Unit: Commercial" in reply:
         return "Commercial"
 
-    if "Business Unit: Corporate" in last_reply:
+    if "Business Unit: Corporate" in reply:
         return "Corporate"
 
-    if "Savings/CASA product rate" in last_reply:
+    if "Savings/CASA product rate" in reply:
         return "Retail"
 
-    if "Retail FD product rate" in last_reply:
+    if "Retail FD product rate" in reply:
         return "Retail"
 
-    if "DPS/recurring deposit product rate" in last_reply:
+    if "DPS/recurring deposit product rate" in reply:
         return "Retail"
+
+    answer_match = re.search(
+        r"^(Retail|Commercial|Corporate)\s+(.+?)\s+interest rate:",
+        reply,
+        flags=re.IGNORECASE,
+    )
+
+    if answer_match:
+        business_unit = answer_match.group(1).title()
+        subject = strip_deposit_timeline_from_subject(answer_match.group(2))
+
+        return f"{business_unit} {subject}".strip()
 
     return ""
+
+
+def deposit_rate_prompt_context(session_id):
+    history = get_chat_history(session_id, limit=12)
+
+    for message in reversed(history):
+        if message["role"] != "assistant":
+            continue
+
+        context = deposit_rate_context_from_reply(message["content"])
+
+        if context:
+            return context
+
+    return ""
+
+
+def build_contextual_deposit_rate_reply(session_id, user_message):
+    if has_card_rate_context(user_message) or has_lending_rate_context(user_message):
+        return ""
+
+    if is_broad_interest_rate_question(user_message):
+        return ""
+
+    if not (
+        looks_like_deposit_rate_product_name(user_message)
+        or (
+            (is_deposit_rate_question(user_message) or has_rate_word(user_message))
+            and has_specific_deposit_rate_context(user_message)
+        )
+    ):
+        return ""
+
+    rate_context = deposit_rate_followup_context(
+        deposit_rate_prompt_context(session_id),
+        user_message,
+    )
+
+    if not rate_context:
+        return ""
+
+    rate_query = f"{rate_context} {user_message}".strip()
+
+    return answer_deposit_rate_question_from_db(
+        f"{rate_query} deposit interest rate"
+    )
 
 
 def last_reply_was_lending_rate_product_prompt(session_id):
@@ -2152,6 +2219,9 @@ def build_interest_rate_flow_reply(session_id, user_message):
         return INTEREST_RATE_TYPE_REPLY
 
     if last_reply_was_deposit_rate_product_prompt(session_id):
+        if is_broad_interest_rate_question(user_message):
+            return INTEREST_RATE_TYPE_REPLY
+
         if get_interest_rate_type_choice(user_message) == "lending":
             return LENDING_RATE_PRODUCT_REPLY
 
@@ -2160,7 +2230,10 @@ def build_interest_rate_flow_reply(session_id, user_message):
         if menu_reply:
             return menu_reply
 
-        rate_context = deposit_rate_prompt_context(session_id)
+        rate_context = deposit_rate_followup_context(
+            deposit_rate_prompt_context(session_id),
+            user_message,
+        )
         rate_query = f"{rate_context} {user_message}".strip()
 
         return (
@@ -2192,6 +2265,14 @@ def build_interest_rate_flow_reply(session_id, user_message):
 
     if is_broad_interest_rate_question(user_message):
         return INTEREST_RATE_TYPE_REPLY
+
+    contextual_deposit_reply = build_contextual_deposit_rate_reply(
+        session_id,
+        user_message,
+    )
+
+    if contextual_deposit_reply:
+        return contextual_deposit_reply
 
     selected_rate_type = get_interest_rate_type_choice(user_message)
     normalized_message = normalize_menu_text(user_message)
@@ -5080,13 +5161,13 @@ def build_quick_actions(reply, source):
         "deposit product rate do you want?" in reply
         and source in {"deposit-rate-database", "interest-rate-router"}
     ):
-        return []
+        return extract_bullet_quick_actions(reply, limit=60)
 
     if (
         "timeline do you want?" in reply
         and source in {"deposit-rate-database", "interest-rate-router"}
     ):
-        return []
+        return extract_bullet_quick_actions(reply, limit=60)
 
     if (
         "lending product rate do you want?" in reply

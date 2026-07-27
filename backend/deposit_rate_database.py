@@ -225,9 +225,6 @@ def expand_words(words):
     if "womens" in expanded:
         add("women")
 
-    if "corp" in expanded:
-        add("corporate")
-
     if "corporate" in expanded:
         add("corp")
 
@@ -402,11 +399,32 @@ def row_field_words(row, *field_names):
 
 def requested_business_units(words):
     units = []
+    word_set = set(words)
+    primary_unit_words = {
+        "retail": "Retail",
+        "commercial": "Commercial",
+        "corporate": "Corporate",
+    }
 
-    for word in words:
-        for business_unit in BUSINESS_UNIT_WORDS.get(word, []):
+    def add_units(business_units):
+        for business_unit in business_units:
             if business_unit not in units:
                 units.append(business_unit)
+
+    for word in words:
+        business_unit = primary_unit_words.get(word)
+
+        if business_unit:
+            return [business_unit]
+
+    if "sme" in word_set:
+        add_units(["SME", "Commercial"])
+
+    if "corp" in word_set:
+        add_units(["Corporate"])
+
+    for word in words:
+        add_units(BUSINESS_UNIT_WORDS.get(word, []))
 
     return units
 
@@ -948,6 +966,413 @@ def get_products_for_deposit_rate_menu_option(menu_key):
     return products
 
 
+DEPOSIT_MENU_ENTRY_LABELS = {
+    "business unit retail": [
+        "FD",
+        "Extra Value FD",
+        "EBL Super FD",
+        "EBL Super FD Repeat",
+        "EBL Super Repeat",
+        "EBL Century",
+    ],
+    "business unit commercial": [
+        "FD",
+        "Extra Value FD",
+        "EBL Super",
+        "EBL Super Repeat",
+        "EBL Century",
+    ],
+    "business unit corporate": [
+        "FD",
+        "Extra Value FD",
+        "EBL ALO",
+        "EBL High Value",
+        "EBL Diamond Corp",
+        "EBL Diamond Commercial",
+        "EBL Repeat",
+        "EBL Repeat Corp",
+        "EBL Repeat Commercial",
+        "EBL 50",
+        "EBL Earn First",
+        "EBL Earn First - SME",
+    ],
+}
+
+
+DEPOSIT_PRODUCT_FAMILY_RULES = [
+    {"key": "ebl_earn_first_sme", "label": "EBL Earn First - SME", "exact_products": ("EBL Earn First - SME",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {"key": "ebl_diamond_commercial", "label": "EBL Diamond Commercial", "exact_products": ("EBL Diamond Commercial",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {"key": "ebl_repeat_commercial", "label": "EBL Repeat Commercial", "exact_products": ("EBL Repeat Commercial",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {"key": "ebl_diamond_corp", "label": "EBL Diamond Corp", "exact_products": ("EBL Diamond Corp",), "fallback_to_all_units": True},
+    {"key": "ebl_repeat_corp", "label": "EBL Repeat Corp", "exact_products": ("EBL Repeat Corp",), "fallback_to_all_units": True},
+    {"key": "extra_value_fd", "label": "Extra Value FD", "exact_products": ("Extra Value FD 1 Month", "Extra Value FD 3 Month", "Extra Value FD 3 Months", "Extra Value FD 6 Month", "Extra Value FD 6 Months", "Extra Value FD 1 Year")},
+    {"key": "ebl_super_fd_repeat", "label": "EBL Super FD Repeat", "exact_products": ("EBL Super FD Repeat 189 Days", "EBL Super FD Repeat 369 Days")},
+    {
+        "key": "ebl_super_repeat",
+        "label": "EBL Super Repeat",
+        "exact_products": ("EBL Super 120 Days", "EBL Super Repeat 150 Days", "EBL Super Repeat 360 Days", "EBL Super 399 Days"),
+        "exact_products_by_unit": {
+            "Retail": ("EBL Super 120 Days", "EBL Super Repeat 150 Days", "EBL Super Repeat 360 Days", "EBL Super 399 Days"),
+            "Commercial": ("EBL Super Repeat 150 Days", "EBL Super Repeat 360 Days"),
+        },
+    },
+    {"key": "ebl_century", "label": "EBL Century", "exact_products": ("EBL Super Century", "EBL Super Double Century", "EBL Super Double Century Repeat")},
+    {"key": "ebl_super_century", "label": "EBL Super Century", "exact_products": ("EBL Super Century", "EBL Super Double Century", "EBL Super Double Century Repeat")},
+    {"key": "ebl_super_fd", "label": "EBL Super FD", "exact_products": ("EBL Super FD 99 Days", "EBL Super FD 189 Days", "EBL Super FD 369 Days", "EBL Super FD 3 Month", "EBL Super FD 6 Month")},
+    {"key": "ebl_high_value", "label": "EBL High Value", "exact_products": ("EBL High Value",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {"key": "ebl_earn_first", "label": "EBL Earn First", "exact_products": ("EBL Earn First",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {"key": "ebl_repeat", "label": "EBL Repeat", "exact_products": ("EBL Repeat",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {
+        "key": "ebl_super",
+        "label": "EBL Super",
+        "exact_products_by_unit": {
+            "Commercial": ("EBL Super 120 Days", "EBL Super 150 Days", "EBL Super 360 Days", "EBL Super 399 Days"),
+        },
+    },
+    {"key": "ebl_alo", "label": "EBL ALO", "exact_products": ("EBL ALO",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {"key": "ebl_50", "label": "EBL 50", "exact_products": ("EBL 50",), "fallback_to_all_units": True, "fallback_units": ("Corporate",)},
+    {"key": "fd", "label": "FD", "exact_products": ("FD 1 Month", "FD 3 Month", "FD 3 Months", "FD 6 Month", "FD 6 Months", "FD 1 Year", "FD 2 Year", "FD 2 Years", "FD 3 Year", "FD 3 Years")},
+]
+
+
+DEPOSIT_PRODUCT_FAMILY_BY_KEY = {
+    rule["key"]: rule
+    for rule in DEPOSIT_PRODUCT_FAMILY_RULES
+}
+
+
+def normalize_family_phrase(text):
+    return re.sub(r"[^a-z0-9.]+", " ", (text or "").lower()).strip()
+
+
+def deposit_product_family(product):
+    product_text = normalize_text(product)
+
+    for rule in DEPOSIT_PRODUCT_FAMILY_RULES:
+        if product_matches_deposit_family_rule(product_text, rule):
+            return rule
+
+    return None
+
+
+def product_matches_deposit_family_rule(product_text, rule, business_unit=None):
+    exact_products_by_unit = rule.get("exact_products_by_unit", {})
+    exact_products = exact_products_by_unit.get(
+        business_unit,
+        rule.get("exact_products", ()),
+    )
+
+    if exact_products:
+        exact_product_texts = {
+            normalize_text(product)
+            for product in exact_products
+        }
+
+        return product_text in exact_product_texts
+
+    if rule["key"] == "extra_value_fd":
+        return product_text.startswith("extra value fd")
+
+    if rule["key"] == "ebl_super_repeat":
+        return product_text.startswith("ebl super") and "repeat" in product_text
+
+    if rule["key"] == "ebl_super_century":
+        return (
+            product_text.startswith("ebl super")
+            and "century" in product_text
+            and "repeat" not in product_text
+        )
+
+    if rule["key"] == "ebl_super_fd":
+        return (
+            product_text.startswith("ebl super fd")
+            and "repeat" not in product_text
+        )
+
+    if rule["key"] == "ebl_super":
+        return (
+            product_text.startswith("ebl super")
+            and "century" not in product_text
+            and "repeat" not in product_text
+            and not product_text.startswith("ebl super fd")
+        )
+
+    if rule["key"] == "fd":
+        return product_text.startswith("fd ")
+
+    return False
+
+
+def get_deposit_rate_menu_entries(menu_key):
+    fixed_entries = DEPOSIT_MENU_ENTRY_LABELS.get(menu_key)
+
+    if fixed_entries:
+        menu_filter = DEPOSIT_RATE_MENU_FILTERS.get(menu_key, {})
+        menu_label = menu_filter.get("label", "")
+        business_units = (
+            [menu_filter["params"][0]]
+            if menu_label.startswith("Business Unit:") and menu_filter.get("params")
+            else []
+        )
+        entries = []
+
+        for entry in fixed_entries:
+            family = get_deposit_family_rule_for_query(entry)
+
+            if business_units and family:
+                if not get_rows_for_deposit_family(family["key"], business_units):
+                    continue
+
+            entries.append(entry)
+
+        return entries
+
+    products = get_products_for_deposit_rate_menu_option(menu_key)
+    menu_filter = DEPOSIT_RATE_MENU_FILTERS.get(menu_key, {})
+    menu_label = menu_filter.get("label", "")
+    should_group_term_products = menu_label.startswith("Business Unit:")
+    entries = []
+
+    for product in products:
+        family = deposit_product_family(product) if should_group_term_products else None
+        label = family["label"] if family else product
+
+        if label not in entries:
+            entries.append(label)
+
+    return entries
+
+
+def get_deposit_family_rule_for_query(query):
+    normalized_query = normalize_text(query)
+    plain_query = normalize_family_phrase(query)
+
+    if not normalized_query and not plain_query:
+        return None
+
+    for rule in DEPOSIT_PRODUCT_FAMILY_RULES:
+        if (
+            rule["key"] == "ebl_super"
+            and (
+                "century" in plain_query
+                or "repeat" in plain_query
+                or "ebl super fd" in plain_query
+            )
+        ):
+            continue
+
+        family_phrases = [
+            rule["label"].lower(),
+            *(rule.get("aliases", ())),
+        ]
+
+        for phrase in family_phrases:
+            phrase_text = normalize_family_phrase(phrase)
+
+            if phrase_text and (
+                f" {phrase_text} " in f" {plain_query} "
+                or f" {phrase_text} " in f" {normalized_query} "
+            ):
+                return rule
+
+    return None
+
+
+def deposit_rate_followup_context(rate_context, user_message):
+    if not rate_context:
+        return ""
+
+    if get_deposit_family_rule_for_query(user_message):
+        context_words = expand_words(tokenize(rate_context))
+        business_units = requested_business_units(context_words)
+
+        if business_units:
+            return " ".join(business_units)
+
+        return ""
+
+    return rate_context
+
+
+def get_rows_for_deposit_family(family_key, business_units=None):
+    ensure_deposit_rate_database_ready()
+    rule = DEPOSIT_PRODUCT_FAMILY_BY_KEY.get(family_key)
+
+    if not rule:
+        return []
+
+    business_units = business_units or []
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+
+    def fetch_rows(units):
+        if units:
+            placeholders = ", ".join("?" for _ in units)
+            cursor.execute(f"""
+                SELECT *
+                FROM deposit_rates
+                WHERE category IN ('Term Deposit', 'Time Frame Products')
+                AND business_unit IN ({placeholders})
+                ORDER BY id
+            """, units)
+        else:
+            cursor.execute("""
+                SELECT *
+                FROM deposit_rates
+                WHERE category IN ('Term Deposit', 'Time Frame Products')
+                ORDER BY id
+            """)
+
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+            if product_matches_deposit_family_rule(
+                normalize_text(row["product"]),
+                rule,
+                row["business_unit"],
+            )
+        ]
+
+    rows = fetch_rows(business_units)
+
+    if (
+        not rows
+        and business_units
+        and rule.get("fallback_to_all_units")
+        and business_units[0] in rule.get("fallback_units", ())
+    ):
+        rows = fetch_rows([])
+
+        for row in rows:
+            row["business_unit"] = business_units[0]
+
+    connection.close()
+
+    exact_products = rule.get("exact_products", ())
+    exact_products_by_unit = rule.get("exact_products_by_unit", {})
+
+    if business_units:
+        exact_products = exact_products_by_unit.get(business_units[0], exact_products)
+
+    if exact_products:
+        product_order = {
+            normalize_text(product): index
+            for index, product in enumerate(exact_products)
+        }
+
+        rows.sort(
+            key=lambda row: (
+                product_order.get(normalize_text(row["product"]), len(product_order)),
+                row["id"],
+            )
+        )
+
+    return rows
+
+
+def get_products_for_deposit_family(family_key, business_units=None):
+    rows = get_rows_for_deposit_family(family_key, business_units)
+    return unique_in_order(row["product"] for row in rows)
+
+
+def family_label_count_in_query(rule, query):
+    family_label = normalize_family_phrase(rule["label"])
+    query_text = f" {normalize_family_phrase(query)} "
+
+    if not family_label:
+        return 0
+
+    pattern = rf"(?=\s{re.escape(family_label)}\s)"
+
+    return len(re.findall(pattern, query_text))
+
+
+def matching_specific_family_products(query, products):
+    return [
+        product
+        for product in products
+        if product_phrase_in_query(product, query)
+    ]
+
+
+def build_deposit_product_family_reply(query):
+    words = expand_words(tokenize(query))
+    family = get_deposit_family_rule_for_query(query)
+
+    if not family:
+        return ""
+
+    business_units = requested_business_units(words)
+    rows = get_rows_for_deposit_family(family["key"], business_units)
+
+    if query_has_specific_timeline(query):
+        rows = filter_rows_by_duration(rows, words)
+
+    products = unique_in_order(row["product"] for row in rows)
+
+    if not rows:
+        if business_units:
+            return (
+                f"I could not find {family['label']} under "
+                f"{business_units[0]} deposit rates."
+            )
+
+        return ""
+
+    matched_products = matching_specific_family_products(query, products)
+    family_label_text = normalize_text(family["label"])
+
+    if matched_products:
+        is_family_label_match = (
+            len(matched_products) == 1
+            and normalize_text(matched_products[0]) == family_label_text
+        )
+
+        if not is_family_label_match or family_label_count_in_query(family, query) > 1:
+            return ""
+
+    if len(products) == 1:
+        if should_show_timeline_selection(query, rows):
+            row_business_units = unique_in_order(
+                row["business_unit"]
+                for row in rows
+                if row["business_unit"] and row["business_unit"] != "General"
+            )
+
+            if (
+                business_units
+                and family.get("fallback_to_all_units")
+                and row_business_units
+                and not set(row_business_units) & set(business_units)
+            ):
+                return build_timeline_selection_reply_with_subject(
+                    rows,
+                    family["label"],
+                )
+
+            return build_timeline_selection_reply(rows)
+
+        if len(rows) == 1:
+            return format_single_row_answer(rows[0])
+
+        return format_multi_row_answer(rows)
+
+    subject_parts = []
+
+    if len(business_units) == 1:
+        subject_parts.append(business_units[0])
+
+    subject_parts.append(family["label"])
+    subject = " ".join(subject_parts)
+    product_lines = "\n".join(
+        f"- {product} rate"
+        for product in products
+    )
+
+    return f"Which {subject} timeline do you want?\n\n{product_lines}"
+
+
 def build_deposit_rate_menu_reply(query):
     menu_key = get_deposit_rate_menu_option(query)
 
@@ -955,7 +1380,7 @@ def build_deposit_rate_menu_reply(query):
         return ""
 
     label = DEPOSIT_RATE_MENU_FILTERS[menu_key]["label"]
-    products = get_products_for_deposit_rate_menu_option(menu_key)
+    products = get_deposit_rate_menu_entries(menu_key)
 
     if not products:
         return ""
@@ -964,9 +1389,6 @@ def build_deposit_rate_menu_reply(query):
         f"- {product} rate"
         for product in products
     )
-
-    if menu_key.startswith("business unit"):
-        return f"Which {label} deposit timeline do you want?\n\n{product_lines}"
 
     return f"Which {label} deposit product rate do you want?\n\n{product_lines}"
 
@@ -1123,6 +1545,15 @@ def build_timeline_selection_reply(rows):
     return f"Which {subject} timeline do you want?\n\n{timeline_lines}"
 
 
+def build_timeline_selection_reply_with_subject(rows, subject):
+    timeline_lines = "\n".join(
+        f"- {subject} {condition} rate"
+        for condition in unique_in_order(row["condition"] for row in rows)
+    )
+
+    return f"Which {subject} timeline do you want?\n\n{timeline_lines}"
+
+
 def subject_for_rows(rows):
     row = rows[0]
     product = row["product"].strip()
@@ -1213,6 +1644,11 @@ def answer_deposit_rate_question_from_db(query):
 
     if not is_deposit_rate_question(query):
         return ""
+
+    product_family_reply = build_deposit_product_family_reply(query)
+
+    if product_family_reply:
+        return product_family_reply
 
     category_selection_reply = build_deposit_category_selection_reply(query)
 

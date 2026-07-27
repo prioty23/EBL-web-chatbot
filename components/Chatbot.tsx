@@ -563,7 +563,9 @@ export default function Chatbot() {
     return Boolean(
       actions.length > 0 &&
         (normalizedText.includes("select a deposit rate category") ||
-          normalizedText.includes("select a lending rate category")),
+          normalizedText.includes("select a lending rate category") ||
+          normalizedText.includes("deposit product rate do you want") ||
+          normalizedText.includes("timeline do you want")),
     );
   };
 
