@@ -920,6 +920,111 @@ def build_broad_lending_rate_clarification():
     )
 
 
+LENDING_RATE_MENU_SECTIONS = {
+    "agriculture fishing forestry": "A. Agriculture, Fishing & Forestry",
+    "industry": "B. Industry",
+    "construction": "C. Construction",
+    "transport": "D. Transport",
+    "trade commerce": "E. Trade & Commerce",
+    "other institutional loan": "F. Other Institutional Loan",
+    "consumer finance": "G. Consumer Finance",
+    "miscellaneous": "H. Miscellaneous",
+}
+
+
+LENDING_RATE_MENU_LABELS = {
+    "agriculture fishing forestry": "Agriculture, Fishing & Forestry",
+    "industry": "Industry",
+    "construction": "Construction",
+    "transport": "Transport",
+    "trade commerce": "Trade & Commerce",
+    "other institutional loan": "Other Institutional Loan",
+    "consumer finance": "Consumer Finance",
+    "miscellaneous": "Miscellaneous",
+}
+
+
+def get_lending_rate_menu_option(query):
+    normalized_query = normalize_text(query)
+
+    if not normalized_query:
+        return ""
+
+    if {"rate", "rates", "interest"} & set(tokenize(query)):
+        return ""
+
+    aliases = {
+        "agriculture fishing forestry": "agriculture fishing forestry",
+        "agriculture fishing and forestry": "agriculture fishing forestry",
+        "agriculture": "agriculture fishing forestry",
+        "fishing": "agriculture fishing forestry",
+        "forestry": "agriculture fishing forestry",
+        "industry": "industry",
+        "industrial": "industry",
+        "construction": "construction",
+        "transport": "transport",
+        "trade commerce": "trade commerce",
+        "trade and commerce": "trade commerce",
+        "commerce": "trade commerce",
+        "other institutional loan": "other institutional loan",
+        "institutional loan": "other institutional loan",
+        "consumer finance": "consumer finance",
+        "consumer": "consumer finance",
+        "miscellaneous": "miscellaneous",
+    }
+
+    if normalized_query in aliases:
+        return aliases[normalized_query]
+
+    for alias, menu_key in aliases.items():
+        if f" {alias} " in f" {normalized_query} ":
+            return menu_key
+
+    return ""
+
+
+def get_products_for_lending_rate_menu_option(menu_key):
+    ensure_lending_rate_database_ready()
+    section = LENDING_RATE_MENU_SECTIONS.get(menu_key)
+
+    if not section:
+        return []
+
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT economic_purpose
+        FROM lending_rates
+        WHERE section = ?
+        GROUP BY economic_purpose
+        ORDER BY MIN(id)
+    """, (section,))
+    products = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return products
+
+
+def build_lending_rate_menu_reply(query):
+    menu_key = get_lending_rate_menu_option(query)
+
+    if not menu_key:
+        return ""
+
+    label = LENDING_RATE_MENU_LABELS[menu_key]
+    products = get_products_for_lending_rate_menu_option(menu_key)
+
+    if not products:
+        return ""
+
+    product_lines = "\n".join(
+        f"- {product} rate"
+        for product in products
+    )
+
+    return f"Which {label} lending product rate do you want?\n\n{product_lines}"
+
+
 def format_lending_rate_table(rows):
     rows = sorted(rows, key=lambda row: row["id"])
     lines = [

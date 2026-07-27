@@ -849,6 +849,128 @@ def build_broad_rate_clarification():
     )
 
 
+DEPOSIT_RATE_MENU_FILTERS = {
+    "casa products": {
+        "label": "CASA Products",
+        "where": "category = ?",
+        "params": ("CASA Products",),
+    },
+    "other casa products": {
+        "label": "Other CASA Products",
+        "where": "category = ?",
+        "params": ("Other CASA / SND / HPA",),
+    },
+    "business unit retail": {
+        "label": "Business Unit: Retail",
+        "where": "business_unit = ? AND category IN (?, ?)",
+        "params": ("Retail", "Term Deposit", "Time Frame Products"),
+    },
+    "business unit commercial": {
+        "label": "Business Unit: Commercial",
+        "where": "business_unit = ? AND category IN (?, ?)",
+        "params": ("Commercial", "Term Deposit", "Time Frame Products"),
+    },
+    "business unit corporate": {
+        "label": "Business Unit: Corporate",
+        "where": "business_unit = ? AND category IN (?, ?)",
+        "params": ("Corporate", "Term Deposit", "Time Frame Products"),
+    },
+    "recurring deposit": {
+        "label": "Recurring Deposit",
+        "where": "category = ?",
+        "params": ("Recurring Deposit",),
+    },
+}
+
+
+def get_deposit_rate_menu_option(query):
+    normalized_query = normalize_text(query)
+
+    if not normalized_query:
+        return ""
+
+    if {"rate", "rates", "interest"} & set(tokenize(query)):
+        return ""
+
+    aliases = {
+        "casa": "casa products",
+        "casa product": "casa products",
+        "casa products": "casa products",
+        "savings casa": "casa products",
+        "savings casa products": "casa products",
+        "other casa": "other casa products",
+        "other casa product": "other casa products",
+        "other casa products": "other casa products",
+        "snd hpa": "other casa products",
+        "business unit retail": "business unit retail",
+        "retail business unit": "business unit retail",
+        "retail deposit": "business unit retail",
+        "business unit commercial": "business unit commercial",
+        "commercial business unit": "business unit commercial",
+        "commercial deposit": "business unit commercial",
+        "business unit corporate": "business unit corporate",
+        "corporate business unit": "business unit corporate",
+        "corporate deposit": "business unit corporate",
+        "recurring": "recurring deposit",
+        "recurring deposit": "recurring deposit",
+        "dps": "recurring deposit",
+    }
+
+    if normalized_query in aliases:
+        return aliases[normalized_query]
+
+    for alias, menu_key in aliases.items():
+        if f" {alias} " in f" {normalized_query} ":
+            return menu_key
+
+    return ""
+
+
+def get_products_for_deposit_rate_menu_option(menu_key):
+    ensure_deposit_rate_database_ready()
+    menu_filter = DEPOSIT_RATE_MENU_FILTERS.get(menu_key)
+
+    if not menu_filter:
+        return []
+
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute(f"""
+        SELECT product
+        FROM deposit_rates
+        WHERE {menu_filter["where"]}
+        GROUP BY product
+        ORDER BY MIN(id)
+    """, menu_filter["params"])
+    products = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return products
+
+
+def build_deposit_rate_menu_reply(query):
+    menu_key = get_deposit_rate_menu_option(query)
+
+    if not menu_key:
+        return ""
+
+    label = DEPOSIT_RATE_MENU_FILTERS[menu_key]["label"]
+    products = get_products_for_deposit_rate_menu_option(menu_key)
+
+    if not products:
+        return ""
+
+    product_lines = "\n".join(
+        f"- {product} rate"
+        for product in products
+    )
+
+    if menu_key.startswith("business unit"):
+        return f"Which {label} deposit timeline do you want?\n\n{product_lines}"
+
+    return f"Which {label} deposit product rate do you want?\n\n{product_lines}"
+
+
 def build_product_clarification(rows):
     products = unique_in_order(row["product"] for row in rows)
 
@@ -958,6 +1080,49 @@ def condition_heading_for_category(category):
     return "Condition"
 
 
+TIMELINE_CATEGORIES = {"Recurring Deposit", "Time Frame Products"}
+
+
+def is_timeline_rate_row(row):
+    return row["category"] in TIMELINE_CATEGORIES
+
+
+def query_has_specific_timeline(query):
+    words = expand_words(tokenize(query))
+
+    return bool(duration_words(words))
+
+
+def should_show_timeline_selection(query, rows):
+    if len(rows) <= 1:
+        return False
+
+    product_keys = unique_in_order(product_group_key(row) for row in rows)
+
+    if len(product_keys) != 1:
+        return False
+
+    if not all(is_timeline_rate_row(row) for row in rows):
+        return False
+
+    if query_has_specific_timeline(query):
+        return False
+
+    timelines = unique_in_order(row["condition"] for row in rows)
+
+    return len(timelines) > 1
+
+
+def build_timeline_selection_reply(rows):
+    subject = subject_for_rows(rows)
+    timeline_lines = "\n".join(
+        f"- {subject} {condition} rate"
+        for condition in unique_in_order(row["condition"] for row in rows)
+    )
+
+    return f"Which {subject} timeline do you want?\n\n{timeline_lines}"
+
+
 def subject_for_rows(rows):
     row = rows[0]
     product = row["product"].strip()
@@ -1015,13 +1180,8 @@ def format_rate_table(rows):
 
 def format_single_row_answer(row):
     subject = subject_for_rows([row])
-    condition = row["condition"]
     note = row["note"].strip()
-
-    if condition.lower() == "interest rate":
-        answer = f"{subject} interest rate is {row['rate']}."
-    else:
-        answer = f"{subject} interest rate for {condition} is {row['rate']}."
+    answer = f"{subject} interest rate:\n{format_rate_table([row])}"
 
     if note:
         answer = f"{answer}\nNote: {note}"
@@ -1069,5 +1229,8 @@ def answer_deposit_rate_question_from_db(query):
 
     if len(rows) == 1:
         return format_single_row_answer(rows[0])
+
+    if should_show_timeline_selection(query, rows):
+        return build_timeline_selection_reply(rows)
 
     return format_multi_row_answer(rows)

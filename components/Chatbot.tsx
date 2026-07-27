@@ -556,6 +556,40 @@ export default function Chatbot() {
     </button>
   );
 
+  const shouldRenderServiceActionList = (message: Message) => {
+    const normalizedText = message.text.toLowerCase();
+    const actions = message.quickActions ?? [];
+
+    return Boolean(
+      actions.length > 0 &&
+        (normalizedText.includes("select a deposit rate category") ||
+          normalizedText.includes("select a lending rate category")),
+    );
+  };
+
+  const renderServiceActionList = (actions: string[]) => (
+    <div className="mt-2 w-full max-w-[92%] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600">
+        Select Services
+      </div>
+      <div className="divide-y divide-gray-200">
+        {actions.map((action) => (
+          <button
+            key={action}
+            type="button"
+            onClick={() => {
+              void sendMessage(action);
+            }}
+            disabled={isLoading}
+            className="block w-full px-4 py-3 text-center text-sm font-medium text-[#006A4E] transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {action}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderFeedbackButton = (
     label: string,
     feedback: FeedbackValue,
@@ -741,9 +775,13 @@ export default function Chatbot() {
                       {message.role === "bot" &&
                       message.quickActions &&
                       message.quickActions.length > 0 ? (
-                        <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">
-                          {message.quickActions.map(renderQuickActionButton)}
-                        </div>
+                        shouldRenderServiceActionList(message) ? (
+                          renderServiceActionList(message.quickActions)
+                        ) : (
+                          <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">
+                            {message.quickActions.map(renderQuickActionButton)}
+                          </div>
+                        )
                       ) : null}
                     </div>
                   ))}

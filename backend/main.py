@@ -97,6 +97,7 @@ from charge_database import (
 from deposit_rate_database import (
     answer_deposit_rate_question_from_db,
     build_broad_rate_clarification,
+    build_deposit_rate_menu_reply,
     ensure_deposit_rate_database_ready,
     import_deposit_rate_csvs,
     is_deposit_rate_question,
@@ -106,6 +107,7 @@ from deposit_rate_database import (
 from lending_rate_database import (
     answer_lending_rate_question_from_db,
     build_broad_lending_rate_clarification,
+    build_lending_rate_menu_reply,
     ensure_lending_rate_database_ready,
     import_lending_rate_csvs,
     is_lending_rate_question,
@@ -169,6 +171,8 @@ MAIN_QUICK_ACTIONS = [
     "Loan Information",
     "Card Support",
     "Schedule of Charges",
+    "Interest Rate",
+    "Contact Us",
 ]
 SCHEDULE_CHARGE_QUICK_ACTIONS = [
     "Retail Charges",
@@ -203,6 +207,14 @@ DEPOSIT_RATE_QUICK_ACTIONS = [
     "EBL Kotipoti rate",
     "Retail EBL Super 360 Days rate",
 ]
+DEPOSIT_RATE_CATEGORY_QUICK_ACTIONS = [
+    "CASA Products",
+    "Other CASA Products",
+    "Business Unit: Retail",
+    "Business Unit: Commercial",
+    "Business Unit: Corporate",
+    "Recurring Deposit",
+]
 LENDING_RATE_QUICK_ACTIONS = [
     "Home Loan rate",
     "Personal Loan rate",
@@ -210,6 +222,16 @@ LENDING_RATE_QUICK_ACTIONS = [
     "Credit Cards rate",
     "Food Items rate",
     "Cattle Feeds rate",
+]
+LENDING_RATE_CATEGORY_QUICK_ACTIONS = [
+    "Agriculture, Fishing & Forestry",
+    "Industry",
+    "Construction",
+    "Transport",
+    "Trade & Commerce",
+    "Other Institutional Loan",
+    "Consumer Finance",
+    "Miscellaneous",
 ]
 CHARGE_PROMPT_QUICK_ACTIONS = {
     "retail": [
@@ -1720,6 +1742,7 @@ def get_bare_banking_segment(message):
     if words & {
         "account",
         "accounts",
+        "business",
         "card",
         "cards",
         "charge",
@@ -1739,6 +1762,7 @@ def get_bare_banking_segment(message):
         "recurring",
         "saving",
         "savings",
+        "unit",
     }:
         return ""
 
@@ -2000,12 +2024,29 @@ def last_reply_was_deposit_rate_product_prompt(session_id):
         last_reply.startswith(
         "Please specify the deposit product or category"
     )
-        or "product rate do you want?" in last_reply
+        or "deposit product rate do you want?" in last_reply
+        or "timeline do you want?" in last_reply
+        or "Savings/CASA product rate" in last_reply
+        or "Retail FD product rate" in last_reply
+        or "DPS/recurring deposit product rate" in last_reply
     )
 
 
 def deposit_rate_prompt_context(session_id):
     last_reply = last_assistant_reply(session_id)
+    timeline_match = re.search(r"Which (.+?) timeline do you want\?", last_reply)
+
+    if timeline_match:
+        return timeline_match.group(1).strip()
+
+    if "Business Unit: Retail" in last_reply:
+        return "Retail"
+
+    if "Business Unit: Commercial" in last_reply:
+        return "Commercial"
+
+    if "Business Unit: Corporate" in last_reply:
+        return "Corporate"
 
     if "Savings/CASA product rate" in last_reply:
         return "Retail"
@@ -2020,7 +2061,12 @@ def deposit_rate_prompt_context(session_id):
 
 
 def last_reply_was_lending_rate_product_prompt(session_id):
-    return last_assistant_reply(session_id) == LENDING_RATE_PRODUCT_REPLY
+    last_reply = last_assistant_reply(session_id)
+
+    return (
+        last_reply == LENDING_RATE_PRODUCT_REPLY
+        or "lending product rate do you want?" in last_reply
+    )
 
 
 def build_lending_rate_reply(user_message):
@@ -2052,6 +2098,11 @@ def build_interest_rate_flow_reply(session_id, user_message):
         normalized_message = normalize_menu_text(user_message)
 
         if selected_rate_type == "deposit":
+            menu_reply = build_deposit_rate_menu_reply(user_message)
+
+            if menu_reply:
+                return menu_reply
+
             if normalized_message not in {
                 "deposit",
                 "deposits",
@@ -2104,6 +2155,11 @@ def build_interest_rate_flow_reply(session_id, user_message):
         if get_interest_rate_type_choice(user_message) == "lending":
             return LENDING_RATE_PRODUCT_REPLY
 
+        menu_reply = build_deposit_rate_menu_reply(user_message)
+
+        if menu_reply:
+            return menu_reply
+
         rate_context = deposit_rate_prompt_context(session_id)
         rate_query = f"{rate_context} {user_message}".strip()
 
@@ -2115,8 +2171,22 @@ def build_interest_rate_flow_reply(session_id, user_message):
         )
 
     if last_reply_was_lending_rate_product_prompt(session_id):
-        if get_interest_rate_type_choice(user_message) == "deposit":
+        normalized_message = normalize_menu_text(user_message)
+
+        if get_interest_rate_type_choice(user_message) == "deposit" and normalized_message in {
+            "deposit",
+            "deposits",
+            "deposit rate",
+            "deposit rates",
+            "deposit interest rate",
+            "deposit interest rates",
+        }:
             return build_broad_rate_clarification()
+
+        menu_reply = build_lending_rate_menu_reply(user_message)
+
+        if menu_reply:
+            return menu_reply
 
         return build_lending_rate_reply(user_message)
 
@@ -2136,6 +2206,11 @@ def build_interest_rate_flow_reply(session_id, user_message):
     }:
         return build_broad_rate_clarification()
 
+    deposit_menu_reply = build_deposit_rate_menu_reply(user_message)
+
+    if deposit_menu_reply:
+        return deposit_menu_reply
+
     if (
         selected_rate_type == "deposit"
         and (is_interest_rate_phrase(user_message) or has_rate_word(user_message))
@@ -2151,6 +2226,11 @@ def build_interest_rate_flow_reply(session_id, user_message):
         "loan interest rates",
     }:
         return LENDING_RATE_PRODUCT_REPLY
+
+    lending_menu_reply = build_lending_rate_menu_reply(user_message)
+
+    if lending_menu_reply:
+        return lending_menu_reply
 
     if (
         selected_rate_type == "lending"
@@ -4910,7 +4990,7 @@ WEBSITE_PAGES = [
 ]
 
 
-def unique_quick_actions(actions, limit=30):
+def unique_quick_actions(actions, limit=60):
     unique_actions = []
 
     for action in actions:
@@ -4967,7 +5047,7 @@ def build_quick_actions(reply, source):
         return CARD_CATEGORY_QUICK_ACTIONS
 
     if reply == LENDING_RATE_PRODUCT_REPLY:
-        return []
+        return LENDING_RATE_CATEGORY_QUICK_ACTIONS
 
     if reply.startswith("Which specific Retail charge"):
         return CHARGE_PROMPT_QUICK_ACTIONS["retail"]
@@ -4994,13 +5074,25 @@ def build_quick_actions(reply, source):
         )
 
     if reply.startswith("Please specify the deposit product"):
-        return []
+        return DEPOSIT_RATE_CATEGORY_QUICK_ACTIONS
 
     if (
-        "product rate do you want?" in reply
+        "deposit product rate do you want?" in reply
         and source in {"deposit-rate-database", "interest-rate-router"}
     ):
         return []
+
+    if (
+        "timeline do you want?" in reply
+        and source in {"deposit-rate-database", "interest-rate-router"}
+    ):
+        return []
+
+    if (
+        "lending product rate do you want?" in reply
+        and source in {"lending-rate-database", "interest-rate-router"}
+    ):
+        return extract_bullet_quick_actions(reply, limit=60)
 
     if reply.startswith("Which Retail loan category"):
         return unique_quick_actions(get_loan_categories("Retail"), limit=8)
@@ -5062,7 +5154,7 @@ def display_reply_for_quick_actions(reply, quick_actions):
         return "Which EBL card type do you want to know about?"
 
     if reply == LENDING_RATE_PRODUCT_REPLY:
-        return "Which lending product rate do you want to know?"
+        return "Please select a lending rate category."
 
     if reply.startswith("Which specific Retail charge"):
         return "Which specific Retail charge do you want to know?"
@@ -5083,7 +5175,7 @@ def display_reply_for_quick_actions(reply, quick_actions):
         return "Please specify the product/account type."
 
     if reply.startswith("Please specify the deposit product"):
-        return "Please specify the deposit product or category."
+        return "Please select a deposit rate category."
 
     return strip_quick_action_bullets(reply, quick_actions)
 
