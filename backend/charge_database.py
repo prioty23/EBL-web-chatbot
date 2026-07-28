@@ -25,6 +25,159 @@ CHARGE_COLUMNS = [
 ]
 
 
+RETAIL_CHARGE_MENU_GROUPS = {
+    "account_deposit": {
+        "label": "Account & Deposit Charges",
+        "categories": (
+            "Current Account",
+            "Savings Account",
+            "FCY Account",
+            "SND Account",
+            "RFCD Account",
+            "NITA Account",
+            "Term Deposit",
+            "Monthly Deposit Scheme",
+            "Agent Banking Account",
+            "Other Account Services",
+            "Stop Payment",
+            "Cheque Book",
+        ),
+    },
+    "loan": {
+        "label": "Loan Charges",
+        "categories": ("Retail Loan",),
+    },
+    "cheque_clearing": {
+        "label": "Cheque & Clearing Charges",
+        "categories": (
+            "Cheque Collection",
+            "Cheque Clearing",
+            "FCY Cheque Collection",
+        ),
+    },
+    "fund_remittance": {
+        "label": "Fund Transfer & Remittance",
+        "categories": (
+            "Fund Transfer / Payment Service",
+            "FCY Fund Transfer",
+            "Draft / FTT Cancellation",
+            "Inward Remittance FCY",
+            "Remittance File",
+            "Student File and Others",
+            "FCY Notes Issue",
+            "FCY Cash Encashment",
+            "Government Securities Investment Services",
+            "Standing Instruction",
+            "Sweep",
+            "IPO Refund",
+            "Salary Disbursement",
+        ),
+    },
+    "locker": {
+        "label": "Locker Charges",
+        "categories": ("Locker",),
+    },
+    "certificates_reports": {
+        "label": "Certificates & Reports",
+        "categories": (
+            "Statement and Certificate",
+            "Certificates/Reports",
+            "Holding of Security Items",
+            "Old Voucher Collection",
+        ),
+    },
+    "digital_banking": {
+        "label": "Digital Banking Charges",
+        "categories": (
+            "Internet Banking",
+            "Phone Banking",
+            "SMS Banking",
+            "Skybanking",
+        ),
+    },
+    "other_services": {
+        "label": "Other Service Charges",
+        "categories": (
+            "Fax",
+            "Postage/Mail",
+        ),
+    },
+}
+
+
+SME_CHARGE_MENU_GROUPS = {
+    "account_deposit": {
+        "label": "Account & Deposit Charges",
+        "categories": (
+            "Current Account",
+            "SND / Super HPA Account",
+            "FCY Account",
+            "Shubidha Account",
+            "EBL Protect Current Account",
+            "Term Deposits",
+            "Monthly Deposit Schemes",
+            "Account Statement Charges",
+            "Stop Payment",
+            "Cheque Book",
+        ),
+    },
+    "fund_transfer": {
+        "label": "Fund Transfer & Payment Services",
+        "categories": (
+            "Fund Transfer / Payment Services",
+            "Local Fund Transfer Fee",
+            "Stop Payment Instruction",
+            "Standing Instruction",
+            "Sweep",
+            "Salary Transfer",
+            "IPO Refund",
+            "FCY Fund Transfer",
+            "Draft / FTT Cancellation",
+            "Inward Remittance FCY",
+            "Travelers Cheque / FCY Notes",
+            "Travelers Cheque / FCY Encashment",
+        ),
+    },
+    "cheque_clearing": {
+        "label": "Cheque & Clearing Charges",
+        "categories": (
+            "Cheque Collection",
+            "Cheque Clearing",
+            "FCY Cheque Collection",
+        ),
+    },
+    "certificates_reports": {
+        "label": "Certificates & Reports",
+        "categories": (
+            "Certificates/Reports",
+            "Holding of Bonds",
+        ),
+    },
+    "digital_banking": {
+        "label": "Digital Banking Charges",
+        "categories": (
+            "Internet Banking and Digital Platform",
+            "SMS Banking",
+            "Phone Banking",
+        ),
+    },
+    "other_services": {
+        "label": "Other Service Charges",
+        "categories": (
+            "SWIFT/Fax",
+            "Postage/Mail",
+            "Cost of Stationery",
+            "BPID",
+            "Miscellaneous",
+        ),
+    },
+    "loan": {
+        "label": "Loan Charges",
+        "categories": ("SME Loan Facilities",),
+    },
+}
+
+
 GENERIC_QUERY_WORDS = {
     "about",
     "bank",
@@ -712,6 +865,548 @@ def ensure_charge_database_ready(force_import=False):
         import_charge_csvs(clear_existing=True)
 
     _READY = True
+
+
+def unique_in_order(items):
+    unique_items = []
+
+    for item in items:
+        if item and item not in unique_items:
+            unique_items.append(item)
+
+    return unique_items
+
+
+def retail_charge_group_options():
+    return [
+        group["label"]
+        for group in RETAIL_CHARGE_MENU_GROUPS.values()
+    ]
+
+
+def retail_charge_group_key(label):
+    normalized_label = normalize_text(label)
+
+    if not normalized_label:
+        return ""
+
+    aliases = {
+        "account charge": "account_deposit",
+        "account charges": "account_deposit",
+        "account deposit charge": "account_deposit",
+        "account deposit charges": "account_deposit",
+        "deposit charge": "account_deposit",
+        "deposit charges": "account_deposit",
+        "loan charge": "loan",
+        "loan charges": "loan",
+        "cheque charge": "cheque_clearing",
+        "cheque charges": "cheque_clearing",
+        "cheque clearing charge": "cheque_clearing",
+        "cheque clearing charges": "cheque_clearing",
+        "clearing charge": "cheque_clearing",
+        "clearing charges": "cheque_clearing",
+        "fund transfer": "fund_remittance",
+        "fund transfer remittance": "fund_remittance",
+        "fund transfer remittance charge": "fund_remittance",
+        "fund transfer remittance charges": "fund_remittance",
+        "remittance": "fund_remittance",
+        "remittance charge": "fund_remittance",
+        "remittance charges": "fund_remittance",
+        "locker": "locker",
+        "locker charge": "locker",
+        "locker charges": "locker",
+        "certificate": "certificates_reports",
+        "certificate report": "certificates_reports",
+        "certificate reports": "certificates_reports",
+        "certificates reports": "certificates_reports",
+        "certificates reports charge": "certificates_reports",
+        "certificates reports charges": "certificates_reports",
+        "report": "certificates_reports",
+        "reports": "certificates_reports",
+        "digital": "digital_banking",
+        "digital banking": "digital_banking",
+        "digital banking charge": "digital_banking",
+        "digital banking charges": "digital_banking",
+        "other service": "other_services",
+        "other service charge": "other_services",
+        "other service charges": "other_services",
+    }
+
+    if normalized_label in aliases:
+        return aliases[normalized_label]
+
+    for key, group in RETAIL_CHARGE_MENU_GROUPS.items():
+        if normalized_label == normalize_text(group["label"]):
+            return key
+
+    return ""
+
+
+def retail_charge_group_label(group_key):
+    group = RETAIL_CHARGE_MENU_GROUPS.get(group_key, {})
+
+    return group.get("label", "")
+
+
+def retail_charge_group_categories(group_key):
+    group = RETAIL_CHARGE_MENU_GROUPS.get(group_key)
+
+    if not group:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _item in group["categories"])
+    cursor.execute(f"""
+        SELECT category, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category IN ({placeholders})
+        GROUP BY category
+        ORDER BY MIN(id)
+    """, ("Retail", *group["categories"]))
+    available_categories = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return [
+        category
+        for category in group["categories"]
+        if category in available_categories
+    ]
+
+
+def retail_charge_category_exists(category):
+    normalized_category = normalize_text(category)
+
+    return any(
+        normalized_category == normalize_text(known_category)
+        for group in RETAIL_CHARGE_MENU_GROUPS.values()
+        for known_category in group["categories"]
+    )
+
+
+def retail_charge_category_label(category):
+    normalized_category = normalize_text(category)
+
+    for group in RETAIL_CHARGE_MENU_GROUPS.values():
+        for known_category in group["categories"]:
+            if normalized_category == normalize_text(known_category):
+                return known_category
+
+    return ""
+
+
+def retail_charge_products(category):
+    category = retail_charge_category_label(category)
+
+    if not category:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT product, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        GROUP BY product
+        ORDER BY MIN(id)
+    """, ("Retail", category))
+    products = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return products
+
+
+def retail_charge_product_label(category, product):
+    normalized_product = normalize_text(product)
+
+    for existing_product in retail_charge_products(category):
+        if normalized_product == normalize_text(existing_product):
+            return existing_product
+
+    return ""
+
+
+def retail_charge_product_matches(product):
+    normalized_product = normalize_text(product)
+
+    if not normalized_product:
+        return []
+
+    matches = []
+
+    for group in RETAIL_CHARGE_MENU_GROUPS.values():
+        for category in group["categories"]:
+            for existing_product in retail_charge_products(category):
+                if normalized_product == normalize_text(existing_product):
+                    matches.append((category, existing_product))
+
+    return matches
+
+
+def retail_charge_names(category, product):
+    category = retail_charge_category_label(category)
+    product = retail_charge_product_label(category, product)
+
+    if not category or not product:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT charge_name, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        GROUP BY charge_name
+        ORDER BY MIN(id)
+    """, ("Retail", category, product))
+    charge_names = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return charge_names
+
+
+def retail_charge_name_label(category, product, charge_name):
+    normalized_charge_name = normalize_text(charge_name)
+
+    for existing_charge_name in retail_charge_names(category, product):
+        if normalized_charge_name == normalize_text(existing_charge_name):
+            return existing_charge_name
+
+    return ""
+
+
+def answer_exact_retail_charge(category, product, charge_name):
+    category = retail_charge_category_label(category)
+    product = retail_charge_product_label(category, product)
+    charge_name = retail_charge_name_label(category, product, charge_name)
+
+    if not category or not product or not charge_name:
+        return ""
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT *
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        AND charge_name = ?
+        ORDER BY id
+    """, ("Retail", category, product, charge_name))
+    rows = [dict(row) for row in cursor.fetchall()]
+    connection.close()
+
+    if not rows:
+        return ""
+
+    if len(rows) == 1:
+        return format_single_row_answer(rows[0])
+
+    return format_multi_row_answer(rows)
+
+
+def sme_charge_group_options():
+    return [
+        group["label"]
+        for group in SME_CHARGE_MENU_GROUPS.values()
+    ]
+
+
+def sme_charge_group_key(label):
+    normalized_label = normalize_text(label)
+
+    if not normalized_label:
+        return ""
+
+    aliases = {
+        "account charge": "account_deposit",
+        "account charges": "account_deposit",
+        "account deposit charge": "account_deposit",
+        "account deposit charges": "account_deposit",
+        "deposit charge": "account_deposit",
+        "deposit charges": "account_deposit",
+        "fund transfer": "fund_transfer",
+        "fund transfer charge": "fund_transfer",
+        "fund transfer charges": "fund_transfer",
+        "fund transfer payment": "fund_transfer",
+        "fund transfer payment service": "fund_transfer",
+        "fund transfer payment services": "fund_transfer",
+        "payment service": "fund_transfer",
+        "payment services": "fund_transfer",
+        "remittance": "fund_transfer",
+        "remittance charge": "fund_transfer",
+        "remittance charges": "fund_transfer",
+        "cheque charge": "cheque_clearing",
+        "cheque charges": "cheque_clearing",
+        "cheque clearing charge": "cheque_clearing",
+        "cheque clearing charges": "cheque_clearing",
+        "clearing charge": "cheque_clearing",
+        "clearing charges": "cheque_clearing",
+        "certificate": "certificates_reports",
+        "certificate report": "certificates_reports",
+        "certificate reports": "certificates_reports",
+        "certificates reports": "certificates_reports",
+        "report": "certificates_reports",
+        "reports": "certificates_reports",
+        "digital": "digital_banking",
+        "digital banking": "digital_banking",
+        "digital banking charge": "digital_banking",
+        "digital banking charges": "digital_banking",
+        "other service": "other_services",
+        "other service charge": "other_services",
+        "other service charges": "other_services",
+        "loan charge": "loan",
+        "loan charges": "loan",
+        "sme loan": "loan",
+        "sme loan charge": "loan",
+        "sme loan charges": "loan",
+    }
+
+    if normalized_label in aliases:
+        return aliases[normalized_label]
+
+    for key, group in SME_CHARGE_MENU_GROUPS.items():
+        if normalized_label == normalize_text(group["label"]):
+            return key
+
+    return ""
+
+
+def sme_charge_group_label(group_key):
+    group = SME_CHARGE_MENU_GROUPS.get(group_key, {})
+
+    return group.get("label", "")
+
+
+def sme_charge_group_categories(group_key):
+    group = SME_CHARGE_MENU_GROUPS.get(group_key)
+
+    if not group:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _item in group["categories"])
+    cursor.execute(f"""
+        SELECT category, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category IN ({placeholders})
+        GROUP BY category
+        ORDER BY MIN(id)
+    """, ("SME", *group["categories"]))
+    available_categories = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return [
+        category
+        for category in group["categories"]
+        if category in available_categories
+    ]
+
+
+def sme_charge_category_label(category):
+    normalized_category = normalize_text(category)
+
+    for group in SME_CHARGE_MENU_GROUPS.values():
+        for known_category in group["categories"]:
+            if normalized_category == normalize_text(known_category):
+                return known_category
+
+    return ""
+
+
+def sme_charge_products(category):
+    category = sme_charge_category_label(category)
+
+    if not category:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT product, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        GROUP BY product
+        ORDER BY MIN(id)
+    """, ("SME", category))
+    products = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return products
+
+
+def sme_charge_product_label(category, product):
+    normalized_product = normalize_text(product)
+
+    for existing_product in sme_charge_products(category):
+        if normalized_product == normalize_text(existing_product):
+            return existing_product
+
+    return ""
+
+
+def sme_charge_product_matches(product):
+    normalized_product = normalize_text(product)
+
+    if not normalized_product:
+        return []
+
+    matches = []
+
+    for group in SME_CHARGE_MENU_GROUPS.values():
+        for category in group["categories"]:
+            for existing_product in sme_charge_products(category):
+                if normalized_product == normalize_text(existing_product):
+                    matches.append((category, existing_product))
+
+    return matches
+
+
+def sme_charge_names(category, product):
+    category = sme_charge_category_label(category)
+    product = sme_charge_product_label(category, product)
+
+    if not category or not product:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT charge_name, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        GROUP BY charge_name
+        ORDER BY MIN(id)
+    """, ("SME", category, product))
+    charge_names = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return charge_names
+
+
+def sme_charge_names_for_category(category):
+    category = sme_charge_category_label(category)
+
+    if not category:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT charge_name, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        GROUP BY charge_name
+        ORDER BY MIN(id)
+    """, ("SME", category))
+    charge_names = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return charge_names
+
+
+def sme_charge_name_label(category, product, charge_name):
+    normalized_charge_name = normalize_text(charge_name)
+
+    for existing_charge_name in sme_charge_names(category, product):
+        if normalized_charge_name == normalize_text(existing_charge_name):
+            return existing_charge_name
+
+    return ""
+
+
+def sme_charge_name_for_category_label(category, charge_name):
+    normalized_charge_name = normalize_text(charge_name)
+
+    for existing_charge_name in sme_charge_names_for_category(category):
+        if normalized_charge_name == normalize_text(existing_charge_name):
+            return existing_charge_name
+
+    return ""
+
+
+def answer_exact_sme_charge(category, product, charge_name):
+    category = sme_charge_category_label(category)
+    product = sme_charge_product_label(category, product)
+    charge_name = sme_charge_name_label(category, product, charge_name)
+
+    if not category or not product or not charge_name:
+        return ""
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT *
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        AND charge_name = ?
+        ORDER BY id
+    """, ("SME", category, product, charge_name))
+    rows = [dict(row) for row in cursor.fetchall()]
+    connection.close()
+
+    if not rows:
+        return ""
+
+    if len(rows) == 1:
+        return format_single_row_answer(rows[0])
+
+    return format_multi_row_answer(rows)
+
+
+def answer_exact_sme_category_charge(category, charge_name):
+    category = sme_charge_category_label(category)
+    charge_name = sme_charge_name_for_category_label(category, charge_name)
+
+    if not category or not charge_name:
+        return ""
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT *
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND charge_name = ?
+        ORDER BY id
+    """, ("SME", category, charge_name))
+    rows = [dict(row) for row in cursor.fetchall()]
+    connection.close()
+
+    if not rows:
+        return ""
+
+    if len(rows) == 1:
+        return format_single_row_answer(rows[0])
+
+    return format_multi_row_answer(rows)
 
 
 def detect_requested_schedule(words):

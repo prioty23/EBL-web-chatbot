@@ -565,7 +565,16 @@ export default function Chatbot() {
         (normalizedText.includes("select a deposit rate category") ||
           normalizedText.includes("select a lending rate category") ||
           normalizedText.includes("deposit product rate do you want") ||
-          normalizedText.includes("timeline do you want")),
+          normalizedText.includes("timeline do you want") ||
+          normalizedText.includes("retail charge category do you want") ||
+          normalizedText.includes("retail charge subcategory do you want") ||
+          normalizedText.includes("sme charge category do you want") ||
+          normalizedText.includes("sme charge subcategory do you want") ||
+          normalizedText.includes("sme loan charge do you want") ||
+          normalizedText.includes("sme certificate/report service do you want") ||
+          normalizedText.includes("sme cheque/clearing service do you want") ||
+          normalizedText.includes("product/account type do you want") ||
+          normalizedText.includes("charge do you want for")),
     );
   };
 
@@ -663,6 +672,12 @@ export default function Chatbot() {
     </div>
   );
 
+  const latestBotMessageIndex = messages.reduce(
+    (latestIndex, message, index) =>
+      message.role === "bot" ? index : latestIndex,
+    -1,
+  );
+
   return (
     <>
       <button
@@ -757,36 +772,42 @@ export default function Chatbot() {
                   ref={messageListRef}
                   className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
                 >
-                  {messages.map((message, index) => (
-                    <div key={`${message.role}-${index}`}>
-                      {message.role === "bot" ? (
-                        <p className="mb-1 ml-1 text-xs font-medium text-[#006A4E]">
-                          Eastern Bank PLC
-                        </p>
-                      ) : null}
-                      <div
-                        className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${
-                          message.role === "bot"
-                            ? "bg-[#006A4E] text-white"
-                            : "ml-auto bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {renderMessageContent(message.text)}
-                      </div>
-                      {renderFeedbackControls(message, index)}
-                      {message.role === "bot" &&
+                  {messages.map((message, index) => {
+                    const shouldShowQuickActions =
+                      message.role === "bot" &&
+                      index === latestBotMessageIndex &&
                       message.quickActions &&
-                      message.quickActions.length > 0 ? (
-                        shouldRenderServiceActionList(message) ? (
-                          renderServiceActionList(message.quickActions)
-                        ) : (
-                          <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">
-                            {message.quickActions.map(renderQuickActionButton)}
-                          </div>
-                        )
-                      ) : null}
-                    </div>
-                  ))}
+                      message.quickActions.length > 0;
+
+                    return (
+                      <div key={`${message.role}-${index}`}>
+                        {message.role === "bot" ? (
+                          <p className="mb-1 ml-1 text-xs font-medium text-[#006A4E]">
+                            Eastern Bank PLC
+                          </p>
+                        ) : null}
+                        <div
+                          className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${
+                            message.role === "bot"
+                              ? "bg-[#006A4E] text-white"
+                              : "ml-auto bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {renderMessageContent(message.text)}
+                        </div>
+                        {renderFeedbackControls(message, index)}
+                        {shouldShowQuickActions ? (
+                          shouldRenderServiceActionList(message) ? (
+                            renderServiceActionList(message.quickActions)
+                          ) : (
+                            <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">
+                              {message.quickActions.map(renderQuickActionButton)}
+                            </div>
+                          )
+                        ) : null}
+                      </div>
+                    );
+                  })}
 
                   {isLoading ? renderTypingIndicator() : null}
                 </div>
