@@ -27,6 +27,14 @@ const CHATBOT_API_URL = "http://127.0.0.1:8000/chat";
 const CHATBOT_FEEDBACK_API_URL = "http://127.0.0.1:8000/chat/feedback";
 const ERROR_MESSAGE =
   "Sorry, I could not connect to the chatbot server. Please try again later.";
+const MAIN_MENU_QUICK_ACTIONS = [
+  "Open an Account",
+  "Loan Information",
+  "Card Support",
+  "Schedule of Charges",
+  "Interest Rate",
+  "Contact Us",
+];
 
 const SESSION_STORAGE_KEY = "eastern_ai_session_id";
 const BOT_RESPONSE_DELAY_MS = 1400;
@@ -333,6 +341,51 @@ function shouldShowFeedback(message: Message) {
   );
 }
 
+function shouldShowConversationFollowUp(
+  message: Message,
+  messageIndex: number,
+  latestBotMessageIndex: number,
+) {
+  return shouldShowFeedback(message) && messageIndex === latestBotMessageIndex;
+}
+
+function buildProductFollowUpQuestion(menuText: string) {
+  const firstLine =
+    menuText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? "";
+
+  if (!firstLine) {
+    return "Want to know another product or service?";
+  }
+
+  const normalizedLine = firstLine.replace(/\?+$/, "");
+
+  if (normalizedLine.toLowerCase().startsWith("which ")) {
+    const subject = normalizedLine
+      .replace(/^which\s+/i, "")
+      .replace(/\s+do you want(?: to know)?$/i, "")
+      .replace(/\s+product\/account type\b/i, " product")
+      .replace(/\s+charge do you want for .+$/i, " charge for this product")
+      .trim();
+
+    if (subject) {
+      return `Want to know another ${subject}?`;
+    }
+  }
+
+  if (normalizedLine.toLowerCase().includes("deposit rate category")) {
+    return "Want to know another deposit rate product?";
+  }
+
+  if (normalizedLine.toLowerCase().includes("lending rate category")) {
+    return "Want to know another lending rate product?";
+  }
+
+  return "Want to know another product or service?";
+}
+
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -408,6 +461,46 @@ export default function Chatbot() {
     setInput("");
     setHasStartedConversation(false);
     setShowEndConfirmation(false);
+  };
+
+  const handleShowMainMenu = () => {
+    setShowEndConfirmation(false);
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      {
+        role: "bot",
+        text: chatbotText.welcome,
+        quickActions: MAIN_MENU_QUICK_ACTIONS,
+      },
+    ]);
+  };
+
+  const getPreviousProductMenu = (messageIndex: number) => {
+    for (let index = messageIndex - 1; index >= 0; index -= 1) {
+      const previousMessage = messages[index];
+
+      if (
+        previousMessage.role === "bot" &&
+        previousMessage.quickActions?.length &&
+        shouldRenderServiceActionList(previousMessage)
+      ) {
+        return previousMessage;
+      }
+    }
+
+    return null;
+  };
+
+  const handleShowPreviousProductMenu = (productMenu: Message) => {
+    setShowEndConfirmation(false);
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      {
+        role: "bot",
+        text: productMenu.text,
+        quickActions: productMenu.quickActions,
+      },
+    ]);
   };
 
   const sendMessage = async (message: string) => {
@@ -655,6 +748,65 @@ export default function Chatbot() {
     );
   };
 
+  const renderConversationFollowUp = (
+    message: Message,
+    messageIndex: number,
+  ) => {
+    if (isLoading) {
+      return null;
+    }
+
+    if (
+      !shouldShowConversationFollowUp(
+        message,
+        messageIndex,
+        latestBotMessageIndex,
+      )
+    ) {
+      return null;
+    }
+
+    const previousProductMenu = getPreviousProductMenu(messageIndex);
+
+    return (
+      <div className="mt-2 flex max-w-[92%] flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-gray-500">
+          {previousProductMenu
+            ? buildProductFollowUpQuestion(previousProductMenu.text)
+            : "Want to know another product or service?"}
+        </span>
+        {previousProductMenu ? (
+          <>
+            <button
+              type="button"
+              onClick={() => handleShowPreviousProductMenu(previousProductMenu)}
+              className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#00543E]"
+            >
+              View options
+            </button>
+            <button
+              type="button"
+              onClick={handleShowMainMenu}
+              disabled={isLoading}
+              className="rounded-full border border-[#006A4E]/20 bg-white px-3 py-1.5 text-xs font-semibold text-[#006A4E] transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Main menu
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={handleShowMainMenu}
+            disabled={isLoading}
+            className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#00543E] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Main menu
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const renderTypingIndicator = () => (
     <div
       className="flex items-center gap-2"
@@ -796,6 +948,7 @@ export default function Chatbot() {
                           {renderMessageContent(message.text)}
                         </div>
                         {renderFeedbackControls(message, index)}
+                        {renderConversationFollowUp(message, index)}
                         {shouldShowQuickActions ? (
                           shouldRenderServiceActionList(message) ? (
                             renderServiceActionList(message.quickActions)
