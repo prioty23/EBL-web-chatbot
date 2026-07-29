@@ -89,10 +89,25 @@ from complaint_manager import (
 from knowledge_router import select_knowledge_pages
 
 from charge_database import (
+    answer_exact_corporate_charge,
+    answer_exact_corporate_group_charge,
     answer_exact_retail_charge,
     answer_exact_sme_category_charge,
     answer_exact_sme_charge,
     answer_charge_question_from_db,
+    corporate_charge_category_label,
+    corporate_charge_category_display_label,
+    corporate_charge_group_categories,
+    corporate_charge_group_key,
+    corporate_charge_group_label,
+    corporate_charge_group_options,
+    corporate_charge_name_for_group_label,
+    corporate_charge_name_label,
+    corporate_charge_names,
+    corporate_charge_names_for_group,
+    corporate_charge_product_label,
+    corporate_charge_product_matches,
+    corporate_charge_products,
     ensure_charge_database_ready,
     import_charge_csvs,
     retail_charge_category_label,
@@ -1454,16 +1469,43 @@ def get_schedule_charge_category(message):
         "activation",
         "annual",
         "atm",
+        "bpid",
         "book",
         "cash",
+        "certificate",
         "cheque",
         "closing",
+        "collection",
+        "courier",
+        "digital",
+        "draft",
+        "eblconnect",
+        "export",
+        "fcy",
+        "guarantee",
+        "import",
+        "instruction",
+        "lc",
+        "lending",
+        "loan",
         "maintenance",
+        "npsb",
+        "order",
+        "pay",
         "pin",
+        "postage",
         "processing",
+        "remittance",
         "replacement",
+        "report",
+        "rtgs",
+        "solvency",
+        "standing",
+        "statement",
         "supplementary",
         "swift",
+        "token",
+        "tt",
         "transfer",
         "withdrawal",
     }
@@ -2031,6 +2073,285 @@ def build_sme_charge_flow_reply(session_id, user_message):
             return ""
 
         return answer_exact_sme_charge(category, product, charge_name)
+
+    return ""
+
+
+def build_corporate_charge_group_reply():
+    action_lines = "\n".join(
+        f"- {option}"
+        for option in corporate_charge_group_options()
+    )
+
+    return f"Which Corporate charge category do you want to know?\n\n{action_lines}"
+
+
+def build_corporate_group_service_reply(group_key):
+    group_label = corporate_charge_group_label(group_key)
+    charge_names = corporate_charge_names_for_group(group_key)
+
+    if not group_label or not charge_names:
+        return ""
+
+    action_lines = "\n".join(f"- {charge_name}" for charge_name in charge_names)
+
+    return f"Which Corporate {group_label} charge do you want?\n\n{action_lines}"
+
+
+def build_corporate_charge_subcategory_reply(group_key):
+    group_label = corporate_charge_group_label(group_key)
+    categories = corporate_charge_group_categories(group_key)
+
+    if not group_label or not categories:
+        return ""
+
+    return build_corporate_group_service_reply(group_key)
+
+
+def build_corporate_charge_product_reply(category):
+    category_label = corporate_charge_category_label(category)
+    products = corporate_charge_products(category_label)
+
+    if not category_label or not products:
+        return ""
+
+    if len(products) == 1:
+        return build_corporate_charge_name_reply(category_label, products[0])
+
+    action_lines = "\n".join(f"- {product}" for product in products)
+
+    return (
+        f"Which Corporate {corporate_charge_category_display_label(category_label)} "
+        f"service do you want?\n\n{action_lines}"
+    )
+
+
+def build_corporate_charge_name_reply(category, product):
+    category_label = corporate_charge_category_label(category)
+    product_label = corporate_charge_product_label(category_label, product)
+    charge_names = corporate_charge_names(category_label, product_label)
+
+    if not category_label or not product_label or not charge_names:
+        return ""
+
+    if len(charge_names) == 1:
+        return answer_exact_corporate_charge(
+            category_label,
+            product_label,
+            charge_names[0],
+        )
+
+    action_lines = "\n".join(f"- {charge_name}" for charge_name in charge_names)
+    category_display = corporate_charge_category_display_label(category_label)
+    generic_product_labels = {
+        "Export Trade Service",
+        "Guarantee",
+        "Import Trade Service",
+        "Supply Chain Finance",
+        "Trade Service",
+    }
+
+    if product_label in generic_product_labels:
+        return (
+            f"Which Corporate {category_display} charge do you want?\n\n"
+            f"{action_lines}"
+        )
+
+    return (
+        f"Which Corporate {category_display} charge do you want for {product_label}?\n\n"
+        f"{action_lines}"
+    )
+
+
+def corporate_charge_context_from_reply(reply):
+    if reply.startswith("Which Corporate charge category"):
+        return {"stage": "group"}
+
+    group_charge_match = re.match(
+        r"Which Corporate (.+?) charge do you want\?",
+        reply,
+    )
+
+    if group_charge_match:
+        group_key = corporate_charge_group_key(group_charge_match.group(1).strip())
+
+        if group_key:
+            return {
+                "stage": "group_charge",
+                "group_key": group_key,
+            }
+
+    subcategory_match = re.match(
+        r"Which Corporate charge subcategory do you want under (.+?)\?",
+        reply,
+    )
+
+    if subcategory_match:
+        return {
+            "stage": "subcategory",
+            "group": subcategory_match.group(1).strip(),
+        }
+
+    product_match = re.match(
+        r"Which Corporate (.+?) product/account type do you want\?",
+        reply,
+    )
+
+    if not product_match:
+        product_match = re.match(
+            r"Which Corporate (.+?) service do you want\?",
+            reply,
+        )
+
+    if product_match:
+        return {
+            "stage": "product",
+            "category": product_match.group(1).strip(),
+        }
+
+    charge_match = re.match(
+        r"Which Corporate (.+?) charge do you want for (.+?)\?",
+        reply,
+    )
+
+    if not charge_match:
+        no_product_charge_match = re.match(
+            r"Which Corporate (.+?) charge do you want\?",
+            reply,
+        )
+
+        if no_product_charge_match:
+            category = no_product_charge_match.group(1).strip()
+            products = corporate_charge_products(category)
+
+            if len(products) == 1:
+                return {
+                    "stage": "charge",
+                    "category": category,
+                    "product": products[0],
+                }
+
+    if charge_match:
+        return {
+            "stage": "charge",
+            "category": charge_match.group(1).strip(),
+            "product": charge_match.group(2).strip(),
+        }
+
+    return {}
+
+
+def last_corporate_charge_context(session_id):
+    reply = last_assistant_reply(session_id)
+    return corporate_charge_context_from_reply(reply)
+
+
+def has_recent_corporate_charge_context(session_id):
+    history = get_chat_history(session_id, limit=8)
+
+    for message in reversed(history):
+        if message["role"] != "assistant":
+            continue
+
+        context = corporate_charge_context_from_reply(message["content"])
+
+        if context:
+            return True
+
+    return False
+
+
+def build_corporate_charge_recovery_reply(session_id, user_message):
+    if not has_recent_corporate_charge_context(session_id):
+        return ""
+
+    group_key = corporate_charge_group_key(user_message)
+
+    if group_key:
+        return build_corporate_charge_subcategory_reply(group_key)
+
+    category = corporate_charge_category_label(user_message)
+
+    if category:
+        group_key = corporate_charge_group_key(
+            corporate_charge_category_display_label(category)
+        )
+
+        if group_key:
+            return build_corporate_charge_subcategory_reply(group_key)
+
+        return build_corporate_charge_product_reply(category)
+
+    product_matches = corporate_charge_product_matches(user_message)
+
+    if len(product_matches) == 1:
+        category, product = product_matches[0]
+        return build_corporate_charge_name_reply(category, product)
+
+    return ""
+
+
+def build_corporate_charge_flow_reply(session_id, user_message):
+    context = last_corporate_charge_context(session_id)
+
+    if not context:
+        return ""
+
+    if context["stage"] == "group":
+        group_key = corporate_charge_group_key(user_message)
+
+        if group_key:
+            return build_corporate_charge_subcategory_reply(group_key)
+
+        return ""
+
+    if context["stage"] == "group_charge":
+        group_key = context["group_key"]
+        charge_name = corporate_charge_name_for_group_label(group_key, user_message)
+
+        if charge_name:
+            return answer_exact_corporate_group_charge(group_key, charge_name)
+
+        return ""
+
+    if context["stage"] == "subcategory":
+        category = corporate_charge_category_label(user_message)
+
+        if category:
+            group_key = corporate_charge_group_key(
+                corporate_charge_category_display_label(category)
+            )
+
+            if group_key:
+                return build_corporate_charge_subcategory_reply(group_key)
+
+            return build_corporate_charge_product_reply(category)
+
+        return ""
+
+    if context["stage"] == "product":
+        category = context["category"]
+        product = corporate_charge_product_label(category, user_message)
+
+        if product:
+            return build_corporate_charge_name_reply(category, product)
+
+        return ""
+
+    if context["stage"] == "charge":
+        category = context["category"]
+        product = context["product"]
+        charge_name = corporate_charge_name_label(category, product, user_message)
+
+        if not charge_name:
+            alternate_product = corporate_charge_product_label(category, user_message)
+
+            if alternate_product:
+                return build_corporate_charge_name_reply(category, alternate_product)
+
+            return ""
+
+        return answer_exact_corporate_charge(category, product, charge_name)
 
     return ""
 
@@ -5650,6 +5971,12 @@ def build_quick_actions(reply, source):
     ):
         return extract_bullet_quick_actions(reply, limit=60)
 
+    if (
+        source == "corporate-charge-menu"
+        and reply.startswith("Which Corporate ")
+    ):
+        return extract_bullet_quick_actions(reply, limit=60)
+
     if reply == INTEREST_RATE_TYPE_REPLY:
         return INTEREST_RATE_QUICK_ACTIONS
 
@@ -5678,12 +6005,18 @@ def build_quick_actions(reply, source):
         return CHARGE_PROMPT_QUICK_ACTIONS["cards"]
 
     if reply.startswith("Please specify the exact charge:"):
+        if "\n-" in reply:
+            return extract_bullet_quick_actions(reply, limit=12)
+
         return extract_bullet_quick_actions(
             "- " + reply.split(":", 1)[1].replace(", ", "\n- ").rstrip("."),
             limit=6,
         )
 
     if reply.startswith("Please specify the product/account type:"):
+        if "\n-" in reply:
+            return extract_bullet_quick_actions(reply, limit=12)
+
         return extract_bullet_quick_actions(
             "- " + reply.split(":", 1)[1].replace(", ", "\n- ").rstrip("."),
             limit=6,
@@ -5783,6 +6116,23 @@ def display_reply_for_quick_actions(reply, quick_actions):
         and (
             " product/account type do you want?" in reply
             or " charge do you want for " in reply
+        )
+    ):
+        return reply.splitlines()[0]
+
+    if reply.startswith("Which Corporate charge category"):
+        return "Which Corporate charge category do you want to know?"
+
+    if reply.startswith("Which Corporate charge subcategory"):
+        return reply.splitlines()[0]
+
+    if (
+        reply.startswith("Which Corporate ")
+        and (
+            " product/account type do you want?" in reply
+            or " service do you want?" in reply
+            or " charge do you want for " in reply
+            or " charge do you want?" in reply
         )
     ):
         return reply.splitlines()[0]
@@ -6010,6 +6360,15 @@ def chat(request: ChatRequest):
                 status="answered",
             )
 
+        if schedule_charge_category == "corporate":
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=build_corporate_charge_group_reply(),
+                source="corporate-charge-menu",
+                status="answered",
+            )
+
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
@@ -6071,6 +6430,34 @@ def chat(request: ChatRequest):
             user_message=user_message,
             reply=sme_charge_recovery_reply,
             source="sme-charge-menu",
+            status="answered",
+        )
+
+    corporate_charge_flow_reply = build_corporate_charge_flow_reply(
+        session_id,
+        user_message,
+    )
+
+    if corporate_charge_flow_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=corporate_charge_flow_reply,
+            source="corporate-charge-menu",
+            status="answered",
+        )
+
+    corporate_charge_recovery_reply = build_corporate_charge_recovery_reply(
+        session_id,
+        user_message,
+    )
+
+    if corporate_charge_recovery_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=corporate_charge_recovery_reply,
+            source="corporate-charge-menu",
             status="answered",
         )
 

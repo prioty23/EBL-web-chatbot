@@ -178,6 +178,109 @@ SME_CHARGE_MENU_GROUPS = {
 }
 
 
+CORPORATE_CHARGE_MENU_GROUPS = {
+    "account_maintenance": {
+        "label": "Account Maintenance",
+        "categories": ("Account Maintenance",),
+    },
+    "general_od_ca_snd_hpa": {
+        "label": "General Charges Applicable For OD, CA, SND & HPA",
+        "categories": ("General Charges Applicable For Od, Ca, Snd & Hpa",),
+    },
+    "certificates_reports": {
+        "label": "Certificates / Reports",
+        "categories": ("Certificates / Reports",),
+    },
+    "cash_withdrawal_intercity": {
+        "label": "Cash Withdrawal (Intercity)",
+        "categories": ("Cash Withdrawal (Intercity)",),
+    },
+    "local_funds_transfer": {
+        "label": "Local Funds Transfer",
+        "categories": ("Local Funds Transfer",),
+    },
+    "standing_instruction": {
+        "label": "Standing Instruction (SI)",
+        "categories": ("Standing Instruction (SI)",),
+    },
+    "outward_remittance_fcy": {
+        "label": "Outward Remittance - FCY",
+        "categories": ("Outward Remittance - FCY",),
+    },
+    "cheque_collection": {
+        "label": "Cheque Collection",
+        "categories": ("Cheque Collection",),
+    },
+    "digital_platform": {
+        "label": "Digital Platform",
+        "categories": ("Digital Platform",),
+    },
+    "collection_solution": {
+        "label": "Collection Solution",
+        "categories": ("Collection Solution",),
+    },
+    "lending": {
+        "label": "Lending",
+        "categories": ("Lending",),
+    },
+    "supply_chain_finance": {
+        "label": "Supply Chain Finance",
+        "categories": ("Supply Chain Finance",),
+    },
+    "miscellaneous": {
+        "label": "Miscellaneous",
+        "categories": ("Miscellaneous",),
+    },
+    "government_securities": {
+        "label": "Miscellaneous (Government Securities Investment Services)",
+        "categories": ("Miscellaneous (Government Securities Investment Services)",),
+    },
+    "special_asset": {
+        "label": "Miscellaneous (Special Asset Management)",
+        "categories": ("Miscellaneous (Special Asset Management)",),
+    },
+    "import_lc": {
+        "label": "Import LC",
+        "categories": ("Import LC",),
+    },
+    "import_miscellaneous": {
+        "label": "Import Miscellaneous",
+        "categories": ("Import Miscellaneous",),
+    },
+    "import_bills": {
+        "label": "Import Bills",
+        "categories": ("Import Bills",),
+    },
+    "export": {
+        "label": "Export",
+        "categories": ("Export",),
+    },
+    "guarantee": {
+        "label": "Guarantee",
+        "categories": ("Guarantee",),
+    },
+    "miscellaneous_trade_service": {
+        "label": "Miscellaneous Cost For Trade Service",
+        "categories": ("Miscellaneous Cost For Trade Service",),
+    },
+}
+
+
+CORPORATE_CHARGE_CATEGORY_DISPLAY_LABELS = {
+    "Account Maintenance": "Account Maintenance",
+    "General Charges Applicable For Od, Ca, Snd & Hpa": "General Charges Applicable For OD, CA, SND & HPA",
+    "Cash Withdrawal (Intercity)": "Cash Withdrawal (Intercity)",
+    "Local Funds Transfer": "Local Funds Transfer",
+    "Standing Instruction (SI)": "Standing Instruction",
+    "Certificates / Reports": "Certificates & Reports",
+    "Outward Remittance - FCY": "Outward Remittance - FCY",
+    "Import LC": "Import LC",
+    "Import Bills": "Import Bills",
+    "Import Miscellaneous": "Import Miscellaneous",
+    "Miscellaneous Cost For Trade Service": "Miscellaneous Cost For Trade Service",
+}
+
+
 GENERIC_QUERY_WORDS = {
     "about",
     "bank",
@@ -1409,15 +1512,388 @@ def answer_exact_sme_category_charge(category, charge_name):
     return format_multi_row_answer(rows)
 
 
+def corporate_charge_group_options():
+    return [
+        group["label"]
+        for group in CORPORATE_CHARGE_MENU_GROUPS.values()
+    ]
+
+
+def corporate_charge_group_key(label):
+    normalized_label = normalize_text(label)
+
+    if not normalized_label:
+        return ""
+
+    aliases = {
+        "account": "account_maintenance",
+        "account charge": "account_maintenance",
+        "account charges": "account_maintenance",
+        "account maintenance": "account_maintenance",
+        "account maintenance charge": "account_maintenance",
+        "account maintenance charges": "account_maintenance",
+        "account statement": "account_maintenance",
+        "general charges applicable for od ca snd hpa": "general_od_ca_snd_hpa",
+        "general charges applicable for od ca snd and hpa": "general_od_ca_snd_hpa",
+        "od ca snd hpa": "general_od_ca_snd_hpa",
+        "stop payment": "general_od_ca_snd_hpa",
+        "cheque book": "general_od_ca_snd_hpa",
+        "cash": "cash_withdrawal_intercity",
+        "cash withdrawal": "cash_withdrawal_intercity",
+        "cash withdrawal intercity": "cash_withdrawal_intercity",
+        "cash withdrawal charge": "cash_withdrawal_intercity",
+        "cash withdrawal charges": "cash_withdrawal_intercity",
+        "fund transfer": "local_funds_transfer",
+        "fund transfer charge": "local_funds_transfer",
+        "fund transfer charges": "local_funds_transfer",
+        "local fund transfer": "local_funds_transfer",
+        "local funds transfer": "local_funds_transfer",
+        "local payment": "local_funds_transfer",
+        "local payment charge": "local_funds_transfer",
+        "local payment charges": "local_funds_transfer",
+        "payment": "local_funds_transfer",
+        "payment charge": "local_funds_transfer",
+        "payment charges": "local_funds_transfer",
+        "pay order": "local_funds_transfer",
+        "rtgs": "local_funds_transfer",
+        "standing instruction": "standing_instruction",
+        "standing instruction charge": "standing_instruction",
+        "standing instruction charges": "standing_instruction",
+        "si": "standing_instruction",
+        "cheque": "cheque_collection",
+        "cheque charge": "cheque_collection",
+        "cheque charges": "cheque_collection",
+        "cheque collection": "cheque_collection",
+        "cheque collection charge": "cheque_collection",
+        "cheque collection charges": "cheque_collection",
+        "clearing": "cheque_collection",
+        "clearing charge": "cheque_collection",
+        "clearing charges": "cheque_collection",
+        "collection": "cheque_collection",
+        "collection charge": "cheque_collection",
+        "collection charges": "cheque_collection",
+        "certificate": "certificates_reports",
+        "certificate report": "certificates_reports",
+        "certificate reports": "certificates_reports",
+        "certificates reports": "certificates_reports",
+        "report": "certificates_reports",
+        "reports": "certificates_reports",
+        "digital": "digital_platform",
+        "digital platform": "digital_platform",
+        "digital platform charge": "digital_platform",
+        "digital platform charges": "digital_platform",
+        "eblconnect": "digital_platform",
+        "internet banking": "digital_platform",
+        "collection solution": "collection_solution",
+        "outward remittance": "outward_remittance_fcy",
+        "outward remittance charge": "outward_remittance_fcy",
+        "outward remittance charges": "outward_remittance_fcy",
+        "outward remittance fcy": "outward_remittance_fcy",
+        "fcy": "outward_remittance_fcy",
+        "tt": "outward_remittance_fcy",
+        "draft": "outward_remittance_fcy",
+        "loan": "lending",
+        "loan charge": "lending",
+        "loan charges": "lending",
+        "lending": "lending",
+        "lending charge": "lending",
+        "lending charges": "lending",
+        "supply chain": "supply_chain_finance",
+        "supply chain finance": "supply_chain_finance",
+        "trade": "miscellaneous_trade_service",
+        "trade service": "miscellaneous_trade_service",
+        "trade service charge": "miscellaneous_trade_service",
+        "trade service charges": "miscellaneous_trade_service",
+        "import": "import_lc",
+        "import charge": "import_lc",
+        "import charges": "import_lc",
+        "import lc": "import_lc",
+        "import miscellaneous": "import_miscellaneous",
+        "import other": "import_miscellaneous",
+        "import other charges": "import_miscellaneous",
+        "import bill": "import_bills",
+        "import bills": "import_bills",
+        "export": "export",
+        "export charge": "export",
+        "export charges": "export",
+        "guarantee": "guarantee",
+        "guarantee charge": "guarantee",
+        "guarantee charges": "guarantee",
+        "government securities": "government_securities",
+        "government securities charge": "government_securities",
+        "government securities charges": "government_securities",
+        "bpid": "government_securities",
+        "special asset": "special_asset",
+        "special asset management": "special_asset",
+        "special asset management charge": "special_asset",
+        "special asset management charges": "special_asset",
+        "sam": "special_asset",
+        "misc": "miscellaneous",
+        "miscellaneous": "miscellaneous",
+        "miscellaneous charge": "miscellaneous",
+        "miscellaneous charges": "miscellaneous",
+        "miscellaneous cost for trade service": "miscellaneous_trade_service",
+        "swift": "miscellaneous_trade_service",
+        "courier": "miscellaneous",
+        "postage": "miscellaneous",
+    }
+
+    if normalized_label in aliases:
+        return aliases[normalized_label]
+
+    for key, group in CORPORATE_CHARGE_MENU_GROUPS.items():
+        if normalized_label == normalize_text(group["label"]):
+            return key
+
+    return ""
+
+
+def corporate_charge_group_label(group_key):
+    group = CORPORATE_CHARGE_MENU_GROUPS.get(group_key, {})
+
+    return group.get("label", "")
+
+
+def corporate_charge_category_display_label(category):
+    category = corporate_charge_category_label(category) or category
+
+    return CORPORATE_CHARGE_CATEGORY_DISPLAY_LABELS.get(category, category)
+
+
+def corporate_charge_group_categories(group_key):
+    group = CORPORATE_CHARGE_MENU_GROUPS.get(group_key)
+
+    if not group:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _item in group["categories"])
+    cursor.execute(f"""
+        SELECT category, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category IN ({placeholders})
+        GROUP BY category
+        ORDER BY MIN(id)
+    """, ("Corporate", *group["categories"]))
+    available_categories = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return [
+        category
+        for category in group["categories"]
+        if category in available_categories
+    ]
+
+
+def corporate_charge_category_label(category):
+    normalized_category = normalize_text(category)
+
+    for known_category, display_label in CORPORATE_CHARGE_CATEGORY_DISPLAY_LABELS.items():
+        if normalized_category == normalize_text(display_label):
+            return known_category
+
+    for group in CORPORATE_CHARGE_MENU_GROUPS.values():
+        for known_category in group["categories"]:
+            if normalized_category == normalize_text(known_category):
+                return known_category
+
+    return ""
+
+
+def corporate_charge_products(category):
+    category = corporate_charge_category_label(category)
+
+    if not category:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT product, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        GROUP BY product
+        ORDER BY MIN(id)
+    """, ("Corporate", category))
+    products = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return products
+
+
+def corporate_charge_product_label(category, product):
+    normalized_product = normalize_text(product)
+
+    for existing_product in corporate_charge_products(category):
+        if normalized_product == normalize_text(existing_product):
+            return existing_product
+
+    return ""
+
+
+def corporate_charge_product_matches(product):
+    normalized_product = normalize_text(product)
+
+    if not normalized_product:
+        return []
+
+    matches = []
+
+    for group in CORPORATE_CHARGE_MENU_GROUPS.values():
+        for category in group["categories"]:
+            for existing_product in corporate_charge_products(category):
+                if normalized_product == normalize_text(existing_product):
+                    matches.append((category, existing_product))
+
+    return matches
+
+
+def corporate_charge_names_for_group(group_key):
+    categories = corporate_charge_group_categories(group_key)
+
+    if not categories:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _item in categories)
+    cursor.execute(f"""
+        SELECT charge_name, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category IN ({placeholders})
+        GROUP BY charge_name
+        ORDER BY MIN(id)
+    """, ("Corporate", *categories))
+    charge_names = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return charge_names
+
+
+def corporate_charge_name_for_group_label(group_key, charge_name):
+    normalized_charge_name = normalize_text(charge_name)
+
+    for existing_charge_name in corporate_charge_names_for_group(group_key):
+        if normalized_charge_name == normalize_text(existing_charge_name):
+            return existing_charge_name
+
+    return ""
+
+
+def corporate_charge_names(category, product):
+    category = corporate_charge_category_label(category)
+    product = corporate_charge_product_label(category, product)
+
+    if not category or not product:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT charge_name, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        GROUP BY charge_name
+        ORDER BY MIN(id)
+    """, ("Corporate", category, product))
+    charge_names = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return charge_names
+
+
+def corporate_charge_name_label(category, product, charge_name):
+    normalized_charge_name = normalize_text(charge_name)
+
+    for existing_charge_name in corporate_charge_names(category, product):
+        if normalized_charge_name == normalize_text(existing_charge_name):
+            return existing_charge_name
+
+    return ""
+
+
+def answer_exact_corporate_charge(category, product, charge_name):
+    category = corporate_charge_category_label(category)
+    product = corporate_charge_product_label(category, product)
+    charge_name = corporate_charge_name_label(category, product, charge_name)
+
+    if not category or not product or not charge_name:
+        return ""
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT *
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        AND charge_name = ?
+        ORDER BY id
+    """, ("Corporate", category, product, charge_name))
+    rows = [dict(row) for row in cursor.fetchall()]
+    connection.close()
+
+    if not rows:
+        return ""
+
+    return format_corporate_table_answer(rows)
+
+
+def answer_exact_corporate_group_charge(group_key, charge_name):
+    categories = corporate_charge_group_categories(group_key)
+    charge_name = corporate_charge_name_for_group_label(group_key, charge_name)
+
+    if not categories or not charge_name:
+        return ""
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    placeholders = ", ".join("?" for _item in categories)
+    cursor.execute(f"""
+        SELECT *
+        FROM charges
+        WHERE schedule = ?
+        AND category IN ({placeholders})
+        AND charge_name = ?
+        ORDER BY id
+    """, ("Corporate", *categories, charge_name))
+    rows = [dict(row) for row in cursor.fetchall()]
+    connection.close()
+
+    if not rows:
+        return ""
+
+    return format_corporate_table_answer(rows)
+
+
 def detect_requested_schedule(words):
     word_set = set(words)
+    strong_card_words = CARD_CONTEXT_WORDS - {"atm"}
 
-    if word_set & CARD_CONTEXT_WORDS:
+    if word_set & strong_card_words:
         return "Cards"
 
     for word in words:
         if word in SCHEDULE_WORDS:
             return SCHEDULE_WORDS[word]
+
+    if word_set & CARD_CONTEXT_WORDS:
+        return "Cards"
 
     return ""
 
@@ -2216,6 +2692,9 @@ def normalize_amount(amount, vat_note):
     if lower_amount in {"free", "nil", "n/a", "not applicable"}:
         return amount
 
+    if "vat included" in lower_vat and "vat" in lower_amount:
+        return amount
+
     if "vat included" in lower_vat:
         return f"{amount} (VAT included)"
 
@@ -2577,6 +3056,177 @@ def format_bullet_answer(heading, bullets):
     )
 
 
+def rows_are_corporate(rows):
+    return bool(rows) and all(
+        row["schedule"].strip().lower() == "corporate"
+        for row in rows
+    )
+
+
+def markdown_table_cell(value):
+    return " ".join((value or "").split()).replace("|", "/")
+
+
+def corporate_banking_side(row):
+    condition = normalize_text(row["condition"])
+
+    if "offshore banking" in condition:
+        return "offshore"
+
+    return "onshore"
+
+
+def corporate_condition_detail(row):
+    condition = (row["condition"] or "").strip()
+
+    if not condition:
+        return ""
+
+    detail_parts = []
+
+    for part in condition.split(";"):
+        clean_part = part.strip()
+        normalized_part = normalize_text(clean_part)
+
+        if normalized_part in {"onshore banking", "offshore banking"}:
+            continue
+
+        if normalized_part == normalize_text(row["category"]):
+            continue
+
+        if normalized_part in normalize_text(row["charge_name"]):
+            continue
+
+        detail_parts.append(clean_part)
+
+    return "; ".join(detail_parts)
+
+
+def corporate_table_particular(row, same_charge_name):
+    charge_name = cleanup_subject(row["charge_name"])
+    detail = corporate_condition_detail(row)
+
+    if same_charge_name and detail:
+        return detail
+
+    if same_charge_name:
+        return charge_name
+
+    if detail:
+        return f"{charge_name} - {detail}"
+
+    return charge_name
+
+
+def corporate_table_heading(rows):
+    if rows_have_same_charge_name(rows):
+        return cleanup_subject(rows[0]["charge_name"])
+
+    if rows_share_single_category(rows):
+        return corporate_charge_category_display_label(rows[0]["category"])
+
+    return "Corporate charges"
+
+
+def corporate_side_slab_summary(rows, side):
+    parts = []
+
+    for row in rows:
+        if corporate_banking_side(row) != side:
+            continue
+
+        detail = corporate_condition_detail(row)
+        amount = normalize_amount(row["amount"], row["vat_note"])
+
+        if detail and amount:
+            parts.append(f"{detail}: {amount}")
+        elif amount:
+            parts.append(amount)
+
+    if not parts:
+        return "N/A"
+
+    prefix = "Equivalent Currency "
+    return f"{prefix}{'; '.join(parts)}"
+
+
+def should_collapse_corporate_side_slabs(rows):
+    if not rows_have_same_charge_name(rows):
+        return False
+
+    if not rows_share_single_category(rows):
+        return False
+
+    return rows[0]["category"].strip().lower() == "outward remittance - fcy"
+
+
+def format_corporate_side_slab_table(rows):
+    heading = corporate_table_heading(rows)
+    particular = cleanup_subject(rows[0]["charge_name"])
+    onshore = corporate_side_slab_summary(rows, "onshore")
+    offshore = corporate_side_slab_summary(rows, "offshore")
+
+    return "\n".join([
+        f"{heading}:",
+        "",
+        "| Particulars | Onshore Banking Charges | Offshore Banking Charges |",
+        "| --- | --- | --- |",
+        (
+            "| "
+            f"{markdown_table_cell(particular)} | "
+            f"{markdown_table_cell(onshore)} | "
+            f"{markdown_table_cell(offshore)} |"
+        ),
+    ])
+
+
+def format_corporate_table_answer(rows):
+    if not rows:
+        return ""
+
+    rows = sorted(rows, key=lambda row: row["id"])
+
+    if should_collapse_corporate_side_slabs(rows):
+        return format_corporate_side_slab_table(rows)
+
+    same_charge_name = rows_have_same_charge_name(rows)
+    table_rows = {}
+
+    for row in rows:
+        particular = corporate_table_particular(row, same_charge_name)
+        side = corporate_banking_side(row)
+        amount = normalize_amount(row["amount"], row["vat_note"])
+
+        if particular not in table_rows:
+            table_rows[particular] = {
+                "onshore": "",
+                "offshore": "",
+            }
+
+        existing_amount = table_rows[particular][side]
+        table_rows[particular][side] = (
+            f"{existing_amount} / {amount}" if existing_amount else amount
+        )
+
+    heading = corporate_table_heading(rows)
+    lines = [
+        f"{heading}:",
+        "",
+        "| Particulars | Onshore Banking Charges | Offshore Banking Charges |",
+        "| --- | --- | --- |",
+    ]
+
+    for particular, charges in table_rows.items():
+        lines.append(
+            "| "
+            f"{markdown_table_cell(particular)} | "
+            f"{markdown_table_cell(charges['onshore'] or 'N/A')} | "
+            f"{markdown_table_cell(charges['offshore'] or 'N/A')} |"
+        )
+
+    return "\n".join(lines)
+
+
 def format_product_charge_summary(rows):
     if not rows:
         return ""
@@ -2764,8 +3414,8 @@ def format_multi_row_answer(rows):
 
     if 1 < len(products) <= 6:
         return (
-            "Please specify the product/account type: "
-            f"{', '.join(products)}."
+            "Please specify the product/account type:\n"
+            + "\n".join(f"- {product}" for product in products)
         )
 
     charge_names = []
@@ -2778,8 +3428,8 @@ def format_multi_row_answer(rows):
 
     if 1 < len(charge_names) <= 6:
         return (
-            "Please specify the exact charge: "
-            f"{', '.join(charge_names)}."
+            "Please specify the exact charge:\n"
+            + "\n".join(f"- {charge_name}" for charge_name in charge_names)
         )
 
     return format_single_row_answer(rows[0])
@@ -2793,6 +3443,9 @@ def answer_charge_question_from_db(query, allow_product_only=False):
         return ""
 
     rows = expand_related_rows_for_answer(rows, query)
+
+    if rows_are_corporate(rows):
+        return format_corporate_table_answer(rows)
 
     if (
         allow_product_only

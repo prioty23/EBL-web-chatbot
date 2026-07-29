@@ -196,7 +196,60 @@ function splitMarkdownTableRow(line: string) {
     .map((cell) => cell.trim());
 }
 
-function renderTableCells(cells: string[], isHeader: boolean, rowKey: string) {
+function renderCorporateChargeCellContent(cellContent: string) {
+  const parts = cellContent
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length <= 1) {
+    return formatMessage(cellContent);
+  }
+
+  return (
+    <span className="block space-y-1">
+      {parts.map((part, index) => (
+        <span key={`${part}-${index}`} className="block">
+          {formatMessage(part)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function isCorporateChargeTable(headers: string[]) {
+  const normalizedHeaders = headers.map((header) => header.toLowerCase());
+
+  return (
+    normalizedHeaders.length === 3 &&
+    normalizedHeaders[0] === "particulars" &&
+    normalizedHeaders[1] === "onshore banking charges" &&
+    normalizedHeaders[2] === "offshore banking charges"
+  );
+}
+
+function messageHasCorporateChargeTable(text: string) {
+  const lines = text.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (
+      isMarkdownTableLine(lines[index]) &&
+      isMarkdownTableSeparator(lines[index + 1]) &&
+      isCorporateChargeTable(splitMarkdownTableRow(lines[index]))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function renderTableCells(
+  cells: string[],
+  isHeader: boolean,
+  rowKey: string,
+  isCorporateCharge: boolean,
+) {
   const renderedCells: ReactNode[] = [];
 
   for (let index = 0; index < cells.length; index += 1) {
@@ -210,8 +263,11 @@ function renderTableCells(cells: string[], isHeader: boolean, rowKey: string) {
       colSpan += 1;
     }
 
-    const sharedClassName =
-      "border border-gray-200 px-3 py-2 align-top text-left whitespace-nowrap";
+    const sharedClassName = isCorporateCharge
+      ? `border border-emerald-100 px-3 py-2.5 text-left whitespace-normal break-normal [overflow-wrap:normal] [word-break:normal] ${
+          isHeader || index === 0 ? "align-middle" : "align-top"
+        }`
+      : "border border-gray-200 px-3 py-2 align-top text-left whitespace-nowrap";
     const cellKey = `${rowKey}-${index}`;
     const cellContent = cells[index] || "\u00A0";
 
@@ -220,7 +276,11 @@ function renderTableCells(cells: string[], isHeader: boolean, rowKey: string) {
         <th
           key={cellKey}
           colSpan={colSpan > 1 ? colSpan : undefined}
-          className={`${sharedClassName} bg-gray-50 font-semibold text-gray-900`}
+          className={
+            isCorporateCharge
+              ? `${sharedClassName} bg-emerald-50 font-semibold text-[#064E3B]`
+              : `${sharedClassName} bg-gray-50 font-semibold text-gray-900`
+          }
         >
           {formatMessage(cellContent)}
         </th>,
@@ -230,9 +290,17 @@ function renderTableCells(cells: string[], isHeader: boolean, rowKey: string) {
         <td
           key={cellKey}
           colSpan={colSpan > 1 ? colSpan : undefined}
-          className={`${sharedClassName} text-gray-700`}
+          className={
+            isCorporateCharge
+              ? `${sharedClassName} bg-white text-gray-700 ${
+                  index === 0 ? "font-medium" : ""
+                }`
+              : `${sharedClassName} text-gray-700`
+          }
         >
-          {formatMessage(cellContent)}
+          {isCorporateCharge
+            ? renderCorporateChargeCellContent(cellContent)
+            : formatMessage(cellContent)}
         </td>,
       );
     }
@@ -242,19 +310,45 @@ function renderTableCells(cells: string[], isHeader: boolean, rowKey: string) {
 }
 
 function renderMarkdownTable(headers: string[], rows: string[][], key: string) {
+  const isCorporateCharge = isCorporateChargeTable(headers);
+
   return (
     <div
       key={key}
-      className="my-2 max-w-full overflow-x-auto rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm"
+      className={
+        isCorporateCharge
+          ? "my-2 max-w-full overflow-x-auto rounded-lg border border-emerald-100 bg-white text-gray-800 shadow-sm"
+          : "my-2 max-w-full overflow-x-auto rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm"
+      }
     >
-      <table className="min-w-full border-collapse text-xs leading-5">
+      <table
+        className={
+          isCorporateCharge
+            ? "min-w-[680px] table-fixed border-collapse text-xs leading-5"
+            : "min-w-full border-collapse text-xs leading-5"
+        }
+      >
+        {isCorporateCharge ? (
+          <colgroup>
+            <col style={{ width: "30%" }} />
+            <col style={{ width: "35%" }} />
+            <col style={{ width: "35%" }} />
+          </colgroup>
+        ) : null}
         <thead>
-          <tr>{renderTableCells(headers, true, `${key}-header`)}</tr>
+          <tr>
+            {renderTableCells(headers, true, `${key}-header`, isCorporateCharge)}
+          </tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
             <tr key={`${key}-row-${rowIndex}`}>
-              {renderTableCells(row, false, `${key}-row-${rowIndex}`)}
+              {renderTableCells(
+                row,
+                false,
+                `${key}-row-${rowIndex}`,
+                isCorporateCharge,
+              )}
             </tr>
           ))}
         </tbody>
@@ -666,6 +760,12 @@ export default function Chatbot() {
           normalizedText.includes("sme loan charge do you want") ||
           normalizedText.includes("sme certificate/report service do you want") ||
           normalizedText.includes("sme cheque/clearing service do you want") ||
+          normalizedText.includes("corporate charge category do you want") ||
+          normalizedText.includes("corporate charge subcategory do you want") ||
+          (normalizedText.includes("corporate") &&
+            normalizedText.includes("service do you want")) ||
+          (normalizedText.includes("corporate") &&
+            normalizedText.includes("charge do you want")) ||
           normalizedText.includes("product/account type do you want") ||
           normalizedText.includes("charge do you want for")),
     );
@@ -930,6 +1030,9 @@ export default function Chatbot() {
                       index === latestBotMessageIndex &&
                       message.quickActions &&
                       message.quickActions.length > 0;
+                    const isCorporateTableMessage =
+                      message.role === "bot" &&
+                      messageHasCorporateChargeTable(message.text);
 
                     return (
                       <div key={`${message.role}-${index}`}>
@@ -939,7 +1042,11 @@ export default function Chatbot() {
                           </p>
                         ) : null}
                         <div
-                          className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${
+                          className={`${
+                            isCorporateTableMessage
+                              ? "max-w-full rounded-xl px-2.5 py-2.5"
+                              : "max-w-[88%] rounded-2xl px-4 py-3"
+                          } text-sm leading-6 shadow-sm ${
                             message.role === "bot"
                               ? "bg-[#006A4E] text-white"
                               : "ml-auto bg-gray-100 text-gray-700"
