@@ -127,6 +127,7 @@ from charge_database import (
     retail_charge_group_options,
     retail_charge_name_label,
     retail_charge_names,
+    retail_charge_product_display_label,
     retail_charge_product_label,
     retail_charge_product_matches,
     retail_charge_products,
@@ -1701,7 +1702,10 @@ def build_retail_charge_product_reply(category):
     if len(products) == 1:
         return build_retail_charge_name_reply(category_label, products[0])
 
-    action_lines = "\n".join(f"- {product}" for product in products)
+    action_lines = "\n".join(
+        f"- {retail_charge_product_display_label(category_label, product)}"
+        for product in products
+    )
 
     return (
         f"Which Retail {category_label} product/account type do you want?\n\n"
@@ -1713,6 +1717,10 @@ def build_retail_charge_name_reply(category, product):
     category_label = retail_charge_category_label(category)
     product_label = retail_charge_product_label(category_label, product)
     charge_names = retail_charge_names(category_label, product_label)
+    product_display_label = retail_charge_product_display_label(
+        category_label,
+        product_label,
+    )
 
     if not category_label or not product_label or not charge_names:
         return ""
@@ -1727,7 +1735,7 @@ def build_retail_charge_name_reply(category, product):
     action_lines = "\n".join(f"- {charge_name}" for charge_name in charge_names)
 
     return (
-        f"Which Retail {category_label} charge do you want for {product_label}?\n\n"
+        f"Which Retail {category_label} charge do you want for {product_display_label}?\n\n"
         f"{action_lines}"
     )
 

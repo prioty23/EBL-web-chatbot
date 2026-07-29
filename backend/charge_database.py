@@ -105,6 +105,11 @@ RETAIL_CHARGE_MENU_GROUPS = {
 }
 
 
+RETAIL_CHARGE_PRODUCT_DISPLAY_LABELS = {
+    ("Retail Loan", "All Retail Loans"): "Other Charges of Retail Loan",
+}
+
+
 SME_CHARGE_MENU_GROUPS = {
     "account_deposit": {
         "label": "Account & Deposit Charges",
@@ -1137,11 +1142,28 @@ def retail_charge_products(category):
     return products
 
 
+def retail_charge_product_display_label(category, product):
+    category = retail_charge_category_label(category) or category
+
+    return RETAIL_CHARGE_PRODUCT_DISPLAY_LABELS.get(
+        (category, product),
+        product,
+    )
+
+
 def retail_charge_product_label(category, product):
     normalized_product = normalize_text(product)
 
     for existing_product in retail_charge_products(category):
-        if normalized_product == normalize_text(existing_product):
+        display_product = retail_charge_product_display_label(
+            category,
+            existing_product,
+        )
+
+        if normalized_product in {
+            normalize_text(existing_product),
+            normalize_text(display_product),
+        }:
             return existing_product
 
     return ""
@@ -3551,6 +3573,12 @@ def cleanup_subject(subject):
 def build_subject(row):
     product = row["product"].strip()
     charge_name = row["charge_name"].strip()
+
+    if row["schedule"].strip().lower() == "retail":
+        product = retail_charge_product_display_label(
+            row["category"].strip(),
+            product,
+        )
 
     generic_products = {
         "Any account",
