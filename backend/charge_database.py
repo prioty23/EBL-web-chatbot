@@ -281,6 +281,20 @@ CORPORATE_CHARGE_CATEGORY_DISPLAY_LABELS = {
 }
 
 
+CARD_CHARGE_CATEGORY_LABELS = {
+    "credit": "Credit Cards",
+    "debit": "Debit Cards",
+    "prepaid": "Prepaid Cards",
+}
+
+
+CARD_CHARGE_DISPLAY_LABELS = {
+    "Credit Cards": "Credit Card",
+    "Debit Cards": "Debit Card",
+    "Prepaid Cards": "Prepaid Card",
+}
+
+
 GENERIC_QUERY_WORDS = {
     "about",
     "bank",
@@ -1879,6 +1893,633 @@ def answer_exact_corporate_group_charge(group_key, charge_name):
         return ""
 
     return format_corporate_table_answer(rows)
+
+
+def card_charge_category_options():
+    return [
+        f"{display_label} Charges"
+        for display_label in CARD_CHARGE_DISPLAY_LABELS.values()
+    ]
+
+
+def card_charge_category_label(category):
+    normalized_category = normalize_text(category)
+    category_words = set(normalized_category.split())
+    raw_aliases = {
+        "credit": "Credit Cards",
+        "credit card": "Credit Cards",
+        "credit cards": "Credit Cards",
+        "credit card charge": "Credit Cards",
+        "credit card charges": "Credit Cards",
+        "debit": "Debit Cards",
+        "debit card": "Debit Cards",
+        "debit cards": "Debit Cards",
+        "debit card charge": "Debit Cards",
+        "debit card charges": "Debit Cards",
+        "prepaid": "Prepaid Cards",
+        "prepaid card": "Prepaid Cards",
+        "prepaid cards": "Prepaid Cards",
+        "prepaid card charge": "Prepaid Cards",
+        "prepaid card charges": "Prepaid Cards",
+    }
+    aliases = {
+        normalize_text(alias): value
+        for alias, value in raw_aliases.items()
+    }
+
+    if normalized_category in aliases:
+        return aliases[normalized_category]
+
+    if {"credit", "card"} <= category_words:
+        return "Credit Cards"
+
+    if {"debit", "card"} <= category_words:
+        return "Debit Cards"
+
+    if {"prepaid", "card"} <= category_words:
+        return "Prepaid Cards"
+
+    for known_category in CARD_CHARGE_CATEGORY_LABELS.values():
+        if normalized_category == normalize_text(known_category):
+            return known_category
+
+    return ""
+
+
+def card_charge_category_display_label(category):
+    category = card_charge_category_label(category) or category
+
+    return CARD_CHARGE_DISPLAY_LABELS.get(category, category)
+
+
+def card_charge_products(category):
+    category = card_charge_category_label(category)
+
+    if not category:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT product, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        GROUP BY product
+        ORDER BY MIN(id)
+    """, ("Cards", category))
+    products = [row[0] for row in cursor.fetchall()]
+    connection.close()
+
+    return products
+
+
+def card_charge_product_aliases(category, product):
+    category_label = card_charge_category_display_label(category)
+    aliases = [
+        product,
+        f"EBL {product}",
+        f"{product} card",
+        f"{product} {category_label}",
+    ]
+
+    manual_aliases = {
+        "Visa Classic": [
+            "Classic Credit Card",
+            "Classic Card",
+            "Visa Classic Credit Card",
+        ],
+        "Visa Gold": [
+            "Gold Credit Card",
+            "Gold Card",
+            "Visa Gold Credit Card",
+        ],
+        "Visa Platinum": [
+            "Platinum Credit Card",
+            "Platinum Card",
+            "Visa Platinum Credit Card",
+        ],
+        "Visa Women Platinum": [
+            "Women Platinum Credit Card",
+            "Women Platinum Card",
+            "Visa Women Platinum Credit Card",
+        ],
+        "Visa Army/Air Force/Navy Platinum": [
+            "Visa Army Platinum",
+            "Visa Army Platinum Credit Card",
+            "Army Platinum",
+            "Army Credit Card",
+            "Army Card",
+            "Visa Air Force Platinum",
+            "Visa Air Force Platinum Credit Card",
+            "Air Force Platinum",
+            "Air Force Credit Card",
+            "Air Force Card",
+            "Visa Navy Platinum",
+            "Visa Navy Platinum Credit Card",
+            "Navy Platinum",
+            "Navy Credit Card",
+            "Navy Card",
+        ],
+        "Visa Corporate Platinum": [
+            "Corporate Platinum Credit Card",
+            "Corporate Platinum Card",
+            "Visa Corporate Platinum Credit Card",
+        ],
+        "Visa Signature Light / Women Signature": [
+            "Visa Signature Light",
+            "Visa Signature Lite",
+            "Signature Light Credit Card",
+            "Signature Lite Credit Card",
+            "Visa Women Signature",
+            "Women Signature Credit Card",
+        ],
+        "Visa Infinite": [
+            "Infinite Credit Card",
+            "Visa Infinite Credit Card",
+        ],
+        "Mastercard Titanium": [
+            "Titanium Credit Card",
+            "Mastercard Titanium Credit Card",
+        ],
+        "Mastercard World": [
+            "World Credit Card",
+            "Mastercard World Credit Card",
+        ],
+        "Diners Club": [
+            "Diners Club Credit Card",
+        ],
+        "UnionPay Platinum": [
+            "UnionPay Platinum Credit Card",
+            "UnionPay Platinum Card",
+        ],
+        "FX Credit": [
+            "FX Credit Card",
+            "FX Card",
+        ],
+        "Classic Debit": [
+            "Classic Debit Card",
+        ],
+        "Platinum Debit": [
+            "Platinum Debit Card",
+        ],
+        "Signature Priority Debit": [
+            "Signature Priority Debit Card",
+        ],
+        "UnionPay Classic Debit": [
+            "UnionPay Classic Debit Card",
+        ],
+        "TakaPay Debit": [
+            "TakaPay Debit Card",
+        ],
+        "Signature (Regular) / World Debit": [
+            "Signature Debit",
+            "Signature Regular Debit",
+            "Signature Regular Debit Card",
+            "World Debit",
+            "World Debit Card",
+        ],
+        "Global / Mastercard World RFCD Debit": [
+            "Global Debit",
+            "Global Debit Card",
+            "Mastercard World RFCD Debit",
+            "Mastercard World RFCD Debit Card",
+            "RFCD Debit",
+            "RFCD Debit Card",
+        ],
+        "UnionPay / Mastercard / Visa Prepaid Card": [
+            "UnionPay Prepaid Card",
+            "Mastercard Prepaid Card",
+            "Visa Prepaid Card",
+        ],
+        "Diners Club / FX / ACCA Prepaid Card": [
+            "Diners Club Prepaid Card",
+            "FX Prepaid Card",
+            "ACCA Prepaid Card",
+        ],
+    }
+
+    aliases.extend(manual_aliases.get(product, []))
+
+    if "/" in product:
+        for part in re.split(r"\s*/\s*", product):
+            clean_part = " ".join(part.replace("(", "").replace(")", "").split())
+
+            if not clean_part:
+                continue
+
+            aliases.append(clean_part)
+            aliases.append(f"{clean_part} card")
+            aliases.append(f"{clean_part} {category_label}")
+
+    return list(dict.fromkeys(aliases))
+
+
+def text_contains_normalized_phrase(text, phrase):
+    normalized_text_words = set(normalize_text(text).split())
+    normalized_phrase_words = set(normalize_text(phrase).split())
+
+    if not normalized_phrase_words:
+        return False
+
+    return normalized_phrase_words <= normalized_text_words
+
+
+def card_charge_product_label(category, product):
+    category = card_charge_category_label(category)
+    normalized_product = normalize_text(product)
+
+    if not category or not normalized_product:
+        return ""
+
+    for existing_product in card_charge_products(category):
+        for alias in card_charge_product_aliases(category, existing_product):
+            if normalized_product == normalize_text(alias):
+                return existing_product
+
+    matches = card_charge_product_matches(product, category)
+
+    if len(matches) == 1:
+        return matches[0][1]
+
+    return ""
+
+
+def card_charge_product_matches(message, category=""):
+    category = card_charge_category_label(category) if category else ""
+    matches = []
+
+    for existing_category in CARD_CHARGE_CATEGORY_LABELS.values():
+        if category and existing_category != category:
+            continue
+
+        for product in card_charge_products(existing_category):
+            best_score = 0
+
+            for alias in card_charge_product_aliases(existing_category, product):
+                if text_contains_normalized_phrase(message, alias):
+                    best_score = max(best_score, len(tokenize(alias)))
+
+            if best_score:
+                matches.append((best_score, existing_category, product))
+
+    if not matches:
+        return []
+
+    top_score = max(score for score, _category, _product in matches)
+
+    return [
+        (existing_category, product)
+        for score, existing_category, product in matches
+        if score == top_score
+    ]
+
+
+def card_charge_names(category, product, include_not_applicable=False):
+    category = card_charge_category_label(category)
+    product = card_charge_product_label(category, product)
+
+    if not category or not product:
+        return []
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT charge_name, amount, MIN(id)
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        GROUP BY charge_name
+        ORDER BY MIN(id)
+    """, ("Cards", category, product))
+    rows = cursor.fetchall()
+    connection.close()
+
+    charge_names = []
+
+    for charge_name, amount, _first_id in rows:
+        normalized_amount = (amount or "").strip().lower()
+
+        if (
+            not include_not_applicable
+            and normalized_amount in {"n/a", "not applicable", ""}
+        ):
+            continue
+
+        charge_names.append(charge_name)
+
+    return charge_names
+
+
+def card_charge_name_aliases(charge_name):
+    normalized_charge_name = normalize_text(charge_name)
+    aliases = [charge_name]
+
+    alias_map = {
+        "issuance renewal annual fee primary card": [
+            "annual fee",
+            "annual charge",
+            "yearly fee",
+            "yearly charge",
+            "issuance fee",
+            "renewal fee",
+            "primary card fee",
+        ],
+        "supplementary card free count": [
+            "supplementary card free count",
+            "free supplementary card",
+            "supplementary free card",
+        ],
+        "supplementary card issuance annual renewal fee": [
+            "supplementary card fee",
+            "supplementary card charge",
+            "supplementary issuance fee",
+            "supplementary annual fee",
+            "supplementary renewal fee",
+        ],
+        "card replacement fee": [
+            "card replacement fee",
+            "replacement fee",
+            "replacement charge",
+        ],
+        "pin replacement fee": [
+            "pin replacement fee",
+            "pin change fee",
+            "pin reset fee",
+            "pin fee",
+        ],
+        "late payment fee": ["late payment fee", "late payment charge"],
+        "cash withdrawal advance fee ebl atm": [
+            "cash withdrawal fee",
+            "cash advance fee",
+            "cash withdrawal ebl atm",
+            "cash withdrawal at ebl atm",
+            "ebl atm cash withdrawal fee",
+            "ebl atm cash advance fee",
+        ],
+        "cash withdrawal advance fee other atm": [
+            "cash withdrawal other atm",
+            "cash withdrawal non ebl atm",
+            "cash withdrawal outside ebl atm",
+            "other atm cash withdrawal fee",
+            "non ebl atm cash withdrawal fee",
+        ],
+        "interest rate": [
+            "interest rate",
+            "annual interest rate",
+            "yearly interest rate",
+        ],
+        "return cheque fee": ["return cheque fee", "returned cheque fee"],
+        "duplicate e statement fee": [
+            "duplicate e statement fee",
+            "duplicate statement fee",
+            "e statement fee",
+            "statement fee",
+        ],
+        "overlimit fee": ["overlimit fee", "over limit fee"],
+        "sales voucher retrieval fee": ["sales voucher retrieval fee", "voucher retrieval fee"],
+        "certificate fee": ["certificate fee", "certificate charge"],
+        "risk assurance fee": ["risk assurance fee", "assurance fee"],
+        "card cheque book fee": ["card cheque book fee", "cheque book fee"],
+        "card cheque processing fee": ["card cheque processing fee", "cheque processing fee"],
+        "customer verification cib fee": [
+            "customer verification fee",
+            "cib fee",
+            "verification fee",
+        ],
+        "transaction alert fee": [
+            "transaction alert fee",
+            "sms alert fee",
+            "alert fee",
+        ],
+        "want2buy easycredit adjustment fee": [
+            "want2buy fee",
+            "easycredit fee",
+            "adjustment fee",
+        ],
+        "undelivered card pin destruction fee": [
+            "undelivered card fee",
+            "pin destruction fee",
+            "card pin destruction fee",
+        ],
+        "atm receipt fee ebl": ["atm receipt fee", "ebl atm receipt fee"],
+        "atm cctv footage fee inside dhaka": [
+            "atm cctv footage fee inside dhaka",
+            "cctv footage inside dhaka",
+        ],
+        "atm cctv footage fee outside dhaka": [
+            "atm cctv footage fee outside dhaka",
+            "cctv footage outside dhaka",
+        ],
+        "fund transfer fee ebl skybanking app": [
+            "fund transfer fee",
+            "skybanking fund transfer fee",
+            "ebl skybanking app fund transfer fee",
+        ],
+        "credit card limit increase fee": [
+            "credit card limit increase fee",
+            "credit card limit extension fee",
+            "limit increase fee",
+            "limit extension fee",
+        ],
+        "wallet transfer fee": ["wallet transfer fee", "wallet fee"],
+        "policy administrative and payment fee": [
+            "policy administrative fee",
+            "policy administrative and payment fee",
+            "payment fee",
+        ],
+    }
+
+    normalized_alias_map = {
+        normalize_text(alias_key): alias_values
+        for alias_key, alias_values in alias_map.items()
+    }
+    aliases.extend(normalized_alias_map.get(normalized_charge_name, []))
+    return list(dict.fromkeys(aliases))
+
+
+def card_charge_name_label(category, product, charge_name):
+    category = card_charge_category_label(category)
+    product = card_charge_product_label(category, product)
+    normalized_charge_name = normalize_text(charge_name)
+
+    if not category or not product or not normalized_charge_name:
+        return ""
+
+    available_charge_names = card_charge_names(
+        category,
+        product,
+        include_not_applicable=True,
+    )
+
+    for existing_charge_name in available_charge_names:
+        if normalized_charge_name == normalize_text(existing_charge_name):
+            return existing_charge_name
+
+    if (
+        "supplementary" in normalized_charge_name
+        and "free" not in normalized_charge_name
+    ):
+        for existing_charge_name in available_charge_names:
+            if (
+                normalize_text(existing_charge_name)
+                == "supplementary card issuance annual renewal fee"
+            ):
+                return existing_charge_name
+
+    if (
+        "cash" in normalized_charge_name
+        and "withdrawal" in normalized_charge_name
+        and not (
+            "other" in normalized_charge_name
+            or "non ebl" in normalized_charge_name
+            or "outside ebl" in normalized_charge_name
+        )
+    ):
+        for existing_charge_name in available_charge_names:
+            if normalize_text(existing_charge_name) == "cash withdrawal advance fee ebl atm":
+                return existing_charge_name
+
+    matches = []
+
+    for existing_charge_name in available_charge_names:
+        best_score = 0
+
+        for alias in card_charge_name_aliases(existing_charge_name):
+            if text_contains_normalized_phrase(charge_name, alias):
+                best_score = max(best_score, len(tokenize(alias)))
+
+        if best_score:
+            matches.append((best_score, existing_charge_name))
+
+    if not matches:
+        return ""
+
+    top_score = max(score for score, _charge in matches)
+    top_matches = [
+        existing_charge_name
+        for score, existing_charge_name in matches
+        if score == top_score
+    ]
+
+    if len(top_matches) == 1:
+        return top_matches[0]
+
+    return ""
+
+
+def card_charge_answer_detail(row):
+    condition = display_condition(row)
+    details = []
+    has_whichever = False
+    charge_name = row["charge_name"].strip().lower()
+
+    for part in condition.split(";"):
+        clean_part = part.strip()
+        normalized_part = normalize_text(clean_part)
+
+        if not clean_part:
+            continue
+
+        if normalized_part == "whichever is higher":
+            has_whichever = True
+            continue
+
+        if clean_part.lower() in charge_name:
+            continue
+
+        details.append(clean_part)
+
+    return details, has_whichever
+
+
+def format_card_charge_answer(row):
+    product = row["product"].strip()
+    charge_name = row["charge_name"].strip()
+    amount = normalize_amount(row["amount"], row["vat_note"])
+    subject = cleanup_subject(f"{product} {charge_name}")
+    details, has_whichever = card_charge_answer_detail(row)
+    normalized_amount = amount.lower()
+
+    if normalized_amount in {"n/a", "not applicable", ""}:
+        return f"{subject} is not applicable."
+
+    if (
+        charge_name.strip().lower() == "interest rate"
+        and any(detail.strip().lower() in {"annual", "annually"} for detail in details)
+    ):
+        return f"{product} annual interest rate is {amount}."
+
+    suffix = ", whichever is higher" if has_whichever else ""
+
+    if len(details) == 1:
+        detail = details[0].strip()
+        normalized_detail = normalize_text(detail)
+
+        if normalized_detail in {"annual", "annually"}:
+            return f"{subject} is {amount} annually{suffix}."
+
+        if normalized_detail.startswith("per "):
+            return f"{subject} is {amount} {detail.lower()}{suffix}."
+
+        if normalized_detail == "on outstanding":
+            return f"{subject} is {amount} on outstanding{suffix}."
+
+        return f"{subject} for {detail} is {amount}{suffix}."
+
+    if details:
+        return f"{subject} for {'; '.join(details)} is {amount}{suffix}."
+
+    return f"{subject} is {amount}{suffix}."
+
+
+def answer_exact_card_charge(category, product, charge_name):
+    category = card_charge_category_label(category)
+    product = card_charge_product_label(category, product)
+    charge_name = card_charge_name_label(category, product, charge_name)
+
+    if not category or not product or not charge_name:
+        return ""
+
+    ensure_charge_database_ready()
+    connection = sqlite3.connect(DATABASE_PATH)
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT *
+        FROM charges
+        WHERE schedule = ?
+        AND category = ?
+        AND product = ?
+        AND charge_name = ?
+        ORDER BY id
+    """, ("Cards", category, product, charge_name))
+    row = cursor.fetchone()
+    connection.close()
+
+    if not row:
+        return ""
+
+    return format_card_charge_answer(dict(row))
+
+
+def answer_card_charge_question_from_db(query):
+    category = card_charge_category_label(query)
+    product_matches = card_charge_product_matches(query, category)
+
+    if len(product_matches) != 1:
+        return ""
+
+    category, product = product_matches[0]
+    charge_name = card_charge_name_label(category, product, query)
+
+    if not charge_name:
+        return ""
+
+    return answer_exact_card_charge(category, product, charge_name)
 
 
 def detect_requested_schedule(words):

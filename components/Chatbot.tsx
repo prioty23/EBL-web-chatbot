@@ -766,6 +766,10 @@ export default function Chatbot() {
             normalizedText.includes("service do you want")) ||
           (normalizedText.includes("corporate") &&
             normalizedText.includes("charge do you want")) ||
+          normalizedText.includes("card charge type do you want") ||
+          normalizedText.includes("card product do you want for charges") ||
+          (normalizedText.includes("card") &&
+            normalizedText.includes("charge do you want for")) ||
           normalizedText.includes("product/account type do you want") ||
           normalizedText.includes("charge do you want for")),
     );

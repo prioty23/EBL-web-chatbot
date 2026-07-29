@@ -89,12 +89,22 @@ from complaint_manager import (
 from knowledge_router import select_knowledge_pages
 
 from charge_database import (
+    answer_card_charge_question_from_db,
+    answer_exact_card_charge,
     answer_exact_corporate_charge,
     answer_exact_corporate_group_charge,
     answer_exact_retail_charge,
     answer_exact_sme_category_charge,
     answer_exact_sme_charge,
     answer_charge_question_from_db,
+    card_charge_category_display_label,
+    card_charge_category_label,
+    card_charge_category_options,
+    card_charge_name_label,
+    card_charge_names,
+    card_charge_product_label,
+    card_charge_product_matches,
+    card_charge_products,
     corporate_charge_category_label,
     corporate_charge_category_display_label,
     corporate_charge_group_categories,
@@ -1447,6 +1457,65 @@ def normalize_menu_text(message):
     return " ".join(cleaned_text.split())
 
 
+def normalize_literal_menu_text(message):
+    cleaned_text = "".join(
+        character.lower() if character.isalnum() else " "
+        for character in message
+    )
+
+    return " ".join(cleaned_text.split())
+
+
+def literal_card_charge_menu_category(message):
+    normalized_message = normalize_literal_menu_text(message)
+    menu_aliases = {
+        "card charge": "cards",
+        "card charges": "cards",
+        "cards charge": "cards",
+        "cards charges": "cards",
+        "credit card charge": "credit",
+        "credit card charges": "credit",
+        "credit cards charge": "credit",
+        "credit cards charges": "credit",
+        "debit card charge": "debit",
+        "debit card charges": "debit",
+        "debit cards charge": "debit",
+        "debit cards charges": "debit",
+        "prepaid card charge": "prepaid",
+        "prepaid card charges": "prepaid",
+        "prepaid cards charge": "prepaid",
+        "prepaid cards charges": "prepaid",
+    }
+
+    return menu_aliases.get(normalized_message, "")
+
+
+def literal_schedule_charge_menu_category(message):
+    normalized_message = normalize_literal_menu_text(message)
+    menu_aliases = {
+        "retail charge": "retail",
+        "retail charges": "retail",
+        "retail banking charge": "retail",
+        "retail banking charges": "retail",
+        "sme charge": "sme",
+        "sme charges": "sme",
+        "sme banking charge": "sme",
+        "sme banking charges": "sme",
+        "corp charge": "corporate",
+        "corp charges": "corporate",
+        "corporate charge": "corporate",
+        "corporate charges": "corporate",
+        "corporate banking charge": "corporate",
+        "corporate banking charges": "corporate",
+        "card charge": "cards",
+        "card charges": "cards",
+        "cards charge": "cards",
+        "cards charges": "cards",
+    }
+
+    return menu_aliases.get(normalized_message, "")
+
+
 def is_schedule_charges_menu_request(message):
     normalized_message = normalize_menu_text(message)
 
@@ -1482,6 +1551,8 @@ def get_schedule_charge_category(message):
         "eblconnect",
         "export",
         "fcy",
+        "fee",
+        "fees",
         "guarantee",
         "import",
         "instruction",
@@ -1492,9 +1563,11 @@ def get_schedule_charge_category(message):
         "npsb",
         "order",
         "pay",
+        "payment",
         "pin",
         "postage",
         "processing",
+        "rate",
         "remittance",
         "replacement",
         "report",
@@ -1541,6 +1614,18 @@ def get_schedule_charge_category(message):
             "cards",
             "cards charge",
             "cards charges",
+            "credit card charge",
+            "credit card charges",
+            "credit cards charge",
+            "credit cards charges",
+            "debit card charge",
+            "debit card charges",
+            "debit cards charge",
+            "debit cards charges",
+            "prepaid card charge",
+            "prepaid card charges",
+            "prepaid cards charge",
+            "prepaid cards charges",
         },
     }
 
@@ -2352,6 +2437,178 @@ def build_corporate_charge_flow_reply(session_id, user_message):
             return ""
 
         return answer_exact_corporate_charge(category, product, charge_name)
+
+    return ""
+
+
+def build_card_charge_type_reply():
+    action_lines = "\n".join(
+        f"- {option}"
+        for option in card_charge_category_options()
+    )
+
+    return f"Which Card charge type do you want to know?\n\n{action_lines}"
+
+
+def build_card_charge_product_reply(category):
+    category_label = card_charge_category_label(category)
+    products = card_charge_products(category_label)
+
+    if not category_label or not products:
+        return ""
+
+    display_label = card_charge_category_display_label(category_label)
+    action_lines = "\n".join(f"- {product}" for product in products)
+
+    return (
+        f"Which {display_label} product do you want for charges?\n\n"
+        f"{action_lines}"
+    )
+
+
+def build_card_charge_name_reply(category, product):
+    category_label = card_charge_category_label(category)
+    product_label = card_charge_product_label(category_label, product)
+    charge_names = card_charge_names(category_label, product_label)
+
+    if not category_label or not product_label or not charge_names:
+        return ""
+
+    if len(charge_names) == 1:
+        return answer_exact_card_charge(
+            category_label,
+            product_label,
+            charge_names[0],
+        )
+
+    display_label = card_charge_category_display_label(category_label)
+    action_lines = "\n".join(f"- {charge_name}" for charge_name in charge_names)
+
+    return (
+        f"Which {display_label} charge do you want for {product_label}?\n\n"
+        f"{action_lines}"
+    )
+
+
+def card_charge_context_from_reply(reply):
+    if reply.startswith("Which Card charge type"):
+        return {"stage": "type"}
+
+    product_match = re.match(
+        r"Which (.+?) product do you want for charges\?",
+        reply,
+    )
+
+    if product_match:
+        return {
+            "stage": "product",
+            "category": product_match.group(1).strip(),
+        }
+
+    charge_match = re.match(
+        r"Which (.+?) charge do you want for (.+?)\?",
+        reply,
+    )
+
+    if charge_match:
+        return {
+            "stage": "charge",
+            "category": charge_match.group(1).strip(),
+            "product": charge_match.group(2).strip(),
+        }
+
+    return {}
+
+
+def last_card_charge_context(session_id):
+    reply = last_assistant_reply(session_id)
+    return card_charge_context_from_reply(reply)
+
+
+def recent_card_charge_context(session_id):
+    history = get_chat_history(session_id, limit=8)
+
+    for message in reversed(history):
+        if message["role"] != "assistant":
+            continue
+
+        context = card_charge_context_from_reply(message["content"])
+
+        if context:
+            return context
+
+    return {}
+
+
+def has_recent_card_charge_context(session_id):
+    return bool(recent_card_charge_context(session_id))
+
+
+def build_card_charge_recovery_reply(session_id, user_message):
+    context = recent_card_charge_context(session_id)
+
+    if not context:
+        return ""
+
+    if context["stage"] == "charge":
+        category = context["category"]
+        product = context["product"]
+        charge_name = card_charge_name_label(category, product, user_message)
+
+        if charge_name:
+            return answer_exact_card_charge(category, product, charge_name)
+
+    category = card_charge_category_label(user_message)
+
+    if category:
+        return build_card_charge_product_reply(category)
+
+    product_matches = card_charge_product_matches(user_message)
+
+    if len(product_matches) == 1:
+        category, product = product_matches[0]
+        return build_card_charge_name_reply(category, product)
+
+    return ""
+
+
+def build_card_charge_flow_reply(session_id, user_message):
+    context = last_card_charge_context(session_id)
+
+    if not context:
+        return ""
+
+    if context["stage"] == "type":
+        category = card_charge_category_label(user_message)
+
+        if category:
+            return build_card_charge_product_reply(category)
+
+        return ""
+
+    if context["stage"] == "product":
+        category = context["category"]
+        product = card_charge_product_label(category, user_message)
+
+        if product:
+            return build_card_charge_name_reply(category, product)
+
+        return ""
+
+    if context["stage"] == "charge":
+        category = context["category"]
+        product = context["product"]
+        charge_name = card_charge_name_label(category, product, user_message)
+
+        if not charge_name:
+            alternate_product = card_charge_product_label(category, user_message)
+
+            if alternate_product:
+                return build_card_charge_name_reply(category, alternate_product)
+
+            return ""
+
+        return answer_exact_card_charge(category, product, charge_name)
 
     return ""
 
@@ -5977,6 +6234,17 @@ def build_quick_actions(reply, source):
     ):
         return extract_bullet_quick_actions(reply, limit=60)
 
+    if (
+        source == "card-charge-menu"
+        and (
+            reply.startswith("Which Card ")
+            or reply.startswith("Which Credit Card ")
+            or reply.startswith("Which Debit Card ")
+            or reply.startswith("Which Prepaid Card ")
+        )
+    ):
+        return extract_bullet_quick_actions(reply, limit=60)
+
     if reply == INTEREST_RATE_TYPE_REPLY:
         return INTEREST_RATE_QUICK_ACTIONS
 
@@ -6134,6 +6402,14 @@ def display_reply_for_quick_actions(reply, quick_actions):
             or " charge do you want for " in reply
             or " charge do you want?" in reply
         )
+    ):
+        return reply.splitlines()[0]
+
+    if (
+        reply.startswith("Which Card ")
+        or reply.startswith("Which Credit Card ")
+        or reply.startswith("Which Debit Card ")
+        or reply.startswith("Which Prepaid Card ")
     ):
         return reply.splitlines()[0]
 
@@ -6336,6 +6612,61 @@ def chat(request: ChatRequest):
             status="answered",
         )
 
+    early_card_charge_flow_reply = build_card_charge_flow_reply(
+        session_id,
+        user_message,
+    )
+
+    if early_card_charge_flow_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=early_card_charge_flow_reply,
+            source="card-charge-menu",
+            status="answered",
+        )
+
+    literal_card_category = literal_card_charge_menu_category(user_message)
+
+    if literal_card_category:
+        reply = (
+            build_card_charge_type_reply()
+            if literal_card_category == "cards"
+            else build_card_charge_product_reply(literal_card_category)
+        )
+
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=reply,
+            source="card-charge-menu",
+            status="answered",
+        )
+
+    literal_schedule_category = literal_schedule_charge_menu_category(user_message)
+
+    if literal_schedule_category:
+        if literal_schedule_category == "retail":
+            reply = build_retail_charge_group_reply()
+            source = "retail-charge-menu"
+        elif literal_schedule_category == "sme":
+            reply = build_sme_charge_group_reply()
+            source = "sme-charge-menu"
+        elif literal_schedule_category == "corporate":
+            reply = build_corporate_charge_group_reply()
+            source = "corporate-charge-menu"
+        else:
+            reply = build_card_charge_type_reply()
+            source = "card-charge-menu"
+
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=reply,
+            source=source,
+            status="answered",
+        )
+
     schedule_charge_category = get_schedule_charge_category(user_message)
 
     if schedule_charge_category and (
@@ -6366,6 +6697,22 @@ def chat(request: ChatRequest):
                 user_message=user_message,
                 reply=build_corporate_charge_group_reply(),
                 source="corporate-charge-menu",
+                status="answered",
+            )
+
+        if schedule_charge_category == "cards":
+            card_category = card_charge_category_label(user_message)
+            reply = (
+                build_card_charge_product_reply(card_category)
+                if card_category
+                else build_card_charge_type_reply()
+            )
+
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=reply,
+                source="card-charge-menu",
                 status="answered",
             )
 
@@ -6458,6 +6805,45 @@ def chat(request: ChatRequest):
             user_message=user_message,
             reply=corporate_charge_recovery_reply,
             source="corporate-charge-menu",
+            status="answered",
+        )
+
+    card_charge_flow_reply = build_card_charge_flow_reply(
+        session_id,
+        user_message,
+    )
+
+    if card_charge_flow_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=card_charge_flow_reply,
+            source="card-charge-menu",
+            status="answered",
+        )
+
+    card_charge_recovery_reply = build_card_charge_recovery_reply(
+        session_id,
+        user_message,
+    )
+
+    if card_charge_recovery_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=card_charge_recovery_reply,
+            source="card-charge-menu",
+            status="answered",
+        )
+
+    direct_card_charge_reply = answer_card_charge_question_from_db(user_message)
+
+    if direct_card_charge_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=direct_card_charge_reply,
+            source="card-charge-menu",
             status="answered",
         )
 
