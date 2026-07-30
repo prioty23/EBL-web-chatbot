@@ -15,6 +15,7 @@ from schemas import (
 
 from email_sender import send_final_status_email
 from complaint_email_scheduler import start_complaint_email_scheduler
+from charge_excel_scheduler import start_charge_excel_scheduler
 
 from safety import contains_sensitive_data, get_safety_response
 
@@ -119,7 +120,6 @@ from charge_database import (
     corporate_charge_product_matches,
     corporate_charge_products,
     ensure_charge_database_ready,
-    import_charge_csvs,
     retail_charge_category_label,
     retail_charge_group_categories,
     retail_charge_group_key,
@@ -6535,7 +6535,6 @@ app = FastAPI(
 
 @app.on_event("startup")
 def startup_event():
-    import_charge_csvs(clear_existing=True)
     ensure_charge_database_ready()
     import_deposit_rate_csvs(clear_existing=True)
     ensure_deposit_rate_database_ready()
@@ -6545,6 +6544,7 @@ def startup_event():
     ensure_account_types_ready()
     import_loan_types(clear_existing=True)
     ensure_loan_types_ready()
+    start_charge_excel_scheduler()
     start_complaint_email_scheduler()
     
 
