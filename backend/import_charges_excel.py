@@ -81,54 +81,58 @@ def header_map(header_row):
 def read_charge_excel(path, sheet_name="Charges"):
     workbook = load_workbook(path, read_only=True, data_only=True)
 
-    if sheet_name not in workbook.sheetnames:
-        raise ValueError(f"Workbook does not have a '{sheet_name}' sheet")
+    try:
+        if sheet_name not in workbook.sheetnames:
+            raise ValueError(f"Workbook does not have a '{sheet_name}' sheet")
 
-    sheet = workbook[sheet_name]
-    row_iterator = sheet.iter_rows(values_only=True)
-    header_row = next(row_iterator, None)
+        sheet = workbook[sheet_name]
+        row_iterator = sheet.iter_rows(values_only=True)
+        header_row = next(row_iterator, None)
 
-    if not header_row:
-        raise ValueError("Charges sheet is empty")
+        if not header_row:
+            raise ValueError("Charges sheet is empty")
 
-    headers = header_map(header_row)
-    rows = []
+        headers = header_map(header_row)
+        rows = []
 
-    for row_number, values in enumerate(row_iterator, start=2):
-        row = {
-            column: clean_cell(values[headers[column] - 1])
-            if len(values) >= headers[column]
-            else ""
-            for column in CHARGE_COLUMNS
-        }
+        for row_number, values in enumerate(row_iterator, start=2):
+            row = {
+                column: clean_cell(values[headers[column] - 1])
+                if len(values) >= headers[column]
+                else ""
+                for column in CHARGE_COLUMNS
+            }
 
-        if not any(row.values()):
-            continue
+            if not any(row.values()):
+                continue
 
-        missing_required = [
-            column
-            for column in REQUIRED_COLUMNS
-            if not row[column]
-        ]
+            missing_required = [
+                column
+                for column in REQUIRED_COLUMNS
+                if not row[column]
+            ]
 
-        if missing_required:
-            raise ValueError(
-                f"Charges row {row_number} missing required values: "
-                + ", ".join(missing_required)
-            )
+            if missing_required:
+                raise ValueError(
+                    f"Charges row {row_number} missing required values: "
+                    + ", ".join(missing_required)
+                )
 
-        if row["schedule"] not in ALLOWED_SCHEDULES:
-            raise ValueError(
-                f"Charges row {row_number} has invalid schedule "
-                f"'{row['schedule']}'. Use Retail, SME, Corporate, or Cards."
-            )
+            if row["schedule"] not in ALLOWED_SCHEDULES:
+                raise ValueError(
+                    f"Charges row {row_number} has invalid schedule "
+                    f"'{row['schedule']}'. Use Retail, SME, Corporate, or Cards."
+                )
 
-        rows.append(row)
+            rows.append(row)
 
-    if not rows:
-        raise ValueError("Charges sheet has no charge rows to import")
+        if not rows:
+            raise ValueError("Charges sheet has no charge rows to import")
 
-    return rows
+        return rows
+
+    finally:
+        workbook.close()
 
 
 def import_charge_rows(rows):

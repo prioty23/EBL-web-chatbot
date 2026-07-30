@@ -1,6 +1,9 @@
 """Background scheduler for auto-importing charge data from Excel."""
 
 from pathlib import Path
+import shutil
+import tempfile
+import time
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -13,9 +16,28 @@ CHARGE_EXCEL_PATH = (
     / "EBL_charges_update_template.xlsx"
 )
 CHECK_INTERVAL_MINUTES = 1
+FILE_STABLE_SECONDS = 10
 
 _scheduler = None
 _last_modified_time = None
+
+
+def charge_excel_lock_path():
+    return CHARGE_EXCEL_PATH.with_name(f"~${CHARGE_EXCEL_PATH.name}")
+
+
+def charge_excel_is_ready(modified_time):
+    if charge_excel_lock_path().exists():
+        return False
+
+    return time.time() - modified_time >= FILE_STABLE_SECONDS
+
+
+def read_charge_rows_from_temporary_copy():
+    with tempfile.TemporaryDirectory(prefix="ebl_charge_excel_") as temp_dir:
+        copy_path = Path(temp_dir) / CHARGE_EXCEL_PATH.name
+        shutil.copy2(CHARGE_EXCEL_PATH, copy_path)
+        return read_charge_excel(copy_path)
 
 
 def sync_charges_from_excel_if_changed():
@@ -31,8 +53,11 @@ def sync_charges_from_excel_if_changed():
     if _last_modified_time == modified_time:
         return
 
+    if not charge_excel_is_ready(modified_time):
+        return
+
     try:
-        rows = read_charge_excel(CHARGE_EXCEL_PATH)
+        rows = read_charge_rows_from_temporary_copy()
         inserted = import_charge_rows(rows)
         _last_modified_time = modified_time
         print(
