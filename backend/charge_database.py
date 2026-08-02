@@ -4104,7 +4104,78 @@ def format_multi_row_answer(rows):
     return format_single_row_answer(rows[0])
 
 
+def is_generic_interest_rate_query(query):
+    words = set(tokenize(query))
+
+    if "interest" not in words or not (words & {"rate", "rates"}):
+        return False
+
+    context_words = {
+        "account",
+        "accounts",
+        "agriculture",
+        "auto",
+        "card",
+        "cards",
+        "casa",
+        "commercial",
+        "construction",
+        "consumer",
+        "corporate",
+        "credit",
+        "debit",
+        "deposit",
+        "deposits",
+        "dps",
+        "fd",
+        "fdr",
+        "finance",
+        "fixed",
+        "industry",
+        "lending",
+        "loan",
+        "loans",
+        "prepaid",
+        "retail",
+        "savings",
+        "sme",
+        "transport",
+        "visa",
+    }
+
+    if words & context_words:
+        return False
+
+    generic_words = {
+        "about",
+        "annual",
+        "annually",
+        "bank",
+        "banking",
+        "can",
+        "ebl",
+        "eastern",
+        "interest",
+        "know",
+        "may",
+        "me",
+        "plc",
+        "rate",
+        "rates",
+        "show",
+        "tell",
+        "the",
+        "want",
+        "yearly",
+    }
+
+    return words <= generic_words
+
+
 def answer_charge_question_from_db(query, allow_product_only=False):
+    if is_generic_interest_rate_query(query):
+        return ""
+
     ensure_charge_database_ready()
     rows = get_candidate_rows(query, allow_product_only=allow_product_only)
 

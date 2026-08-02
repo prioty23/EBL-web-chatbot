@@ -30,7 +30,7 @@ const ERROR_MESSAGE =
 const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
-  "Card Support",
+  "Card Information",
   "Schedule of Charges",
   "Interest Rate",
   "Contact Us",

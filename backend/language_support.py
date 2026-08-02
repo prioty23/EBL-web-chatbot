@@ -84,6 +84,7 @@ PHRASE_TRANSLATIONS = [
     ("prepaid card", "prepaid card"),
     ("প্রিপেইড কার্ড", "prepaid card"),
     ("card support", "card support card information"),
+    ("card information", "card information"),
     ("কার্ড সাপোর্ট", "card support card information"),
     ("card hariye geche", "lost card card lost urgent card issue"),
     ("card harai geche", "lost card card lost urgent card issue"),

@@ -16,6 +16,7 @@ from schemas import (
 from email_sender import send_final_status_email
 from complaint_email_scheduler import start_complaint_email_scheduler
 from charge_excel_scheduler import start_charge_excel_scheduler
+from rate_excel_scheduler import start_rate_excel_scheduler
 
 from safety import contains_sensitive_data, get_safety_response
 
@@ -151,7 +152,6 @@ from deposit_rate_database import (
     build_deposit_rate_menu_reply,
     deposit_rate_followup_context,
     ensure_deposit_rate_database_ready,
-    import_deposit_rate_csvs,
     is_deposit_rate_question,
     query_mentions_known_deposit_rate_product,
 )
@@ -161,7 +161,6 @@ from lending_rate_database import (
     build_broad_lending_rate_clarification,
     build_lending_rate_menu_reply,
     ensure_lending_rate_database_ready,
-    import_lending_rate_csvs,
     is_lending_rate_question,
 )
 
@@ -221,7 +220,7 @@ LOAN_CATEGORY_QUESTION = "Do you want to know about SME or Retail loans?"
 MAIN_QUICK_ACTIONS = [
     "Open an Account",
     "Loan Information",
-    "Card Support",
+    "Card Information",
     "Schedule of Charges",
     "Interest Rate",
     "Contact Us",
@@ -2767,6 +2766,7 @@ def is_primary_navigation_message(message):
         "open an account",
         "loan information",
         "card support",
+        "card information",
         "interest rate",
         "interest rates",
         "retail loan",
@@ -6536,15 +6536,14 @@ app = FastAPI(
 @app.on_event("startup")
 def startup_event():
     ensure_charge_database_ready()
-    import_deposit_rate_csvs(clear_existing=True)
     ensure_deposit_rate_database_ready()
-    import_lending_rate_csvs(clear_existing=True)
     ensure_lending_rate_database_ready()
     import_account_types(clear_existing=True)
     ensure_account_types_ready()
     import_loan_types(clear_existing=True)
     ensure_loan_types_ready()
     start_charge_excel_scheduler()
+    start_rate_excel_scheduler()
     start_complaint_email_scheduler()
     
 
@@ -6617,6 +6616,15 @@ def chat(request: ChatRequest):
             user_message=user_message,
             reply=SCHEDULE_CHARGES_MENU_REPLY,
             source="schedule-charges-menu",
+            status="answered",
+        )
+
+    if is_broad_interest_rate_question(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=INTEREST_RATE_TYPE_REPLY,
+            source="interest-rate-router",
             status="answered",
         )
 
