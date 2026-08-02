@@ -235,6 +235,8 @@ INTEREST_RATE_QUICK_ACTIONS = [
     "Deposit Rate",
     "Lending Rate",
 ]
+SCOPED_BACK_MESSAGE = "Back"
+SCOPED_NAVIGATION_STACKS = {}
 LOAN_SEGMENT_QUICK_ACTIONS = [
     "Retail Loans",
     "SME Loans",
@@ -2688,6 +2690,9 @@ def assistant_prompt_domain(reply):
     if not reply:
         return ""
 
+    if reply == get_greeting_reply():
+        return "main_menu"
+
     if retail_charge_context_from_reply(reply):
         return "retail_charge"
 
@@ -2729,6 +2734,136 @@ def assistant_prompt_domain(reply):
         return "card_information"
 
     return ""
+
+
+SCHEDULE_BACK_DOMAINS = {
+    "schedule_charges",
+    "retail_charge",
+    "sme_charge",
+    "corporate_charge",
+    "card_charge",
+}
+INTEREST_BACK_DOMAINS = {
+    "interest_rate",
+    "deposit_rate",
+    "lending_rate",
+}
+SCOPED_BACK_DOMAINS = SCHEDULE_BACK_DOMAINS | INTEREST_BACK_DOMAINS
+
+
+def scoped_back_family(domain):
+    if domain in SCHEDULE_BACK_DOMAINS:
+        return "schedule"
+
+    if domain in INTEREST_BACK_DOMAINS:
+        return "interest"
+
+    return ""
+
+
+def source_for_prompt_domain(domain):
+    return {
+        "main_menu": "greeting-handler",
+        "schedule_charges": "schedule-charges-menu",
+        "retail_charge": "retail-charge-menu",
+        "sme_charge": "sme-charge-menu",
+        "corporate_charge": "corporate-charge-menu",
+        "card_charge": "card-charge-menu",
+        "interest_rate": "interest-rate-router",
+        "deposit_rate": "interest-rate-router",
+        "lending_rate": "interest-rate-router",
+    }.get(domain, "greeting-handler")
+
+
+def scoped_navigation_state(reply, source=""):
+    domain = assistant_prompt_domain(reply)
+
+    if not domain:
+        return {}
+
+    return {
+        "reply": reply,
+        "source": source or source_for_prompt_domain(domain),
+        "domain": domain,
+    }
+
+
+def main_menu_navigation_state():
+    return scoped_navigation_state(get_greeting_reply(), "greeting-handler")
+
+
+def scoped_navigation_stack(session_id):
+    return SCOPED_NAVIGATION_STACKS.setdefault(session_id, [])
+
+
+def record_scoped_navigation_prompt(session_id, reply, source, quick_actions):
+    if not quick_actions:
+        return
+
+    state = scoped_navigation_state(reply, source)
+
+    if not state:
+        return
+
+    domain = state["domain"]
+    stack = scoped_navigation_stack(session_id)
+
+    if domain == "main_menu":
+        SCOPED_NAVIGATION_STACKS[session_id] = [state]
+        return
+
+    if domain not in SCOPED_BACK_DOMAINS:
+        return
+
+    if domain in {"schedule_charges", "interest_rate"}:
+        base_state = stack[0] if stack and stack[0]["domain"] == "main_menu" else main_menu_navigation_state()
+        SCOPED_NAVIGATION_STACKS[session_id] = [base_state, state]
+        return
+
+    if not stack:
+        stack.append(main_menu_navigation_state())
+
+    previous_domain = stack[-1]["domain"] if stack else ""
+    previous_family = scoped_back_family(previous_domain)
+    current_family = scoped_back_family(domain)
+
+    if previous_family and current_family and previous_family != current_family:
+        stack[:] = [main_menu_navigation_state(), state]
+        return
+
+    if stack and stack[-1]["reply"] == reply:
+        stack[-1] = state
+    else:
+        stack.append(state)
+
+    if len(stack) > 30:
+        del stack[:-30]
+
+
+def is_scoped_back_request(message):
+    return normalize_literal_menu_text(message) in {
+        "back",
+        "go back",
+        "previous",
+        "previous menu",
+        "previous options",
+    }
+
+
+def build_scoped_back_navigation_state(session_id):
+    stack = scoped_navigation_stack(session_id)
+
+    if len(stack) <= 1:
+        return {}
+
+    current_domain = stack[-1]["domain"]
+
+    if current_domain not in SCOPED_BACK_DOMAINS:
+        return {}
+
+    stack.pop()
+
+    return stack[-1]
 
 
 def latest_assistant_prompt_domain(session_id, limit=12):
@@ -6602,6 +6737,7 @@ def save_and_build_response(
     status,
     blocked=False,
     quick_actions=None,
+    skip_scoped_navigation_push=False,
 ):
     response_quick_actions = []
 
@@ -6611,6 +6747,14 @@ def save_and_build_response(
             if quick_actions is not None
             else build_quick_actions(reply, source),
         )
+
+        if not skip_scoped_navigation_push:
+            record_scoped_navigation_prompt(
+                session_id,
+                reply,
+                source,
+                response_quick_actions,
+            )
 
     chat_id = save_chat(
         session_id=session_id,
@@ -6742,6 +6886,19 @@ def chat(request: ChatRequest):
             source="schedule-charges-menu",
             status="answered",
         )
+
+    if is_scoped_back_request(user_message):
+        back_state = build_scoped_back_navigation_state(session_id)
+
+        if back_state:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=back_state["reply"],
+                source=back_state["source"],
+                status="navigation",
+                skip_scoped_navigation_push=True,
+            )
 
     if should_prioritize_interest_rate_flow(session_id, user_message):
         priority_interest_rate_reply = build_interest_rate_flow_reply(

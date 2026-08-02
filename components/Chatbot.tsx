@@ -19,6 +19,11 @@ type ChatApiResponse = {
   chat_id?: number;
 };
 
+type SendMessageOptions = {
+  silentUserMessage?: boolean;
+  replaceLatestBotMessage?: boolean;
+};
+
 type FeedbackValue = "helpful" | "not_helpful";
 type FeedbackStatus = "saving" | "saved" | "error";
 
@@ -35,6 +40,7 @@ const MAIN_MENU_QUICK_ACTIONS = [
   "Interest Rate",
   "Contact Us",
 ];
+const SCOPED_BACK_MESSAGE = "Back";
 
 const SESSION_STORAGE_KEY = "eastern_ai_session_id";
 const BOT_RESPONSE_DELAY_MS = 1400;
@@ -480,6 +486,75 @@ function buildProductFollowUpQuestion(menuText: string) {
   return "Want to know another product or service?";
 }
 
+function replaceLatestBotMessage(messages: Message[], botMessage: Message) {
+  const nextMessages = [...messages];
+
+  for (let index = nextMessages.length - 1; index >= 0; index -= 1) {
+    if (nextMessages[index].role === "bot") {
+      nextMessages[index] = botMessage;
+      return nextMessages;
+    }
+  }
+
+  return [...nextMessages, botMessage];
+}
+
+function hasAnyAction(actions: string[] | undefined, expectedActions: string[]) {
+  if (!actions?.length) {
+    return false;
+  }
+
+  const actionSet = new Set(actions.map((action) => action.toLowerCase()));
+
+  return expectedActions.some((action) => actionSet.has(action.toLowerCase()));
+}
+
+function isScopedBackOptionMessage(message: Message | null) {
+  if (!message || message.role !== "bot" || !message.quickActions?.length) {
+    return false;
+  }
+
+  const normalizedText = message.text.toLowerCase();
+  const actions = message.quickActions;
+
+  const isScheduleChargeMenu =
+    normalizedText.includes("banking charge") ||
+    normalizedText.includes("retail charge") ||
+    normalizedText.includes("sme charge") ||
+    normalizedText.includes("corporate charge") ||
+    normalizedText.includes("card charge") ||
+    normalizedText.includes("product do you want for charges") ||
+    normalizedText.includes("charge do you want for") ||
+    normalizedText.includes("service do you want");
+
+  const isScheduleChargeRoot = hasAnyAction(actions, [
+    "Retail Charges",
+    "SME Charges",
+    "Corporate Charges",
+    "Card Charges",
+  ]);
+
+  const isInterestRateMenu =
+    normalizedText.includes("interest rate do you want") ||
+    normalizedText.includes("deposit rate category") ||
+    normalizedText.includes("lending rate category") ||
+    normalizedText.includes("deposit product rate do you want") ||
+    normalizedText.includes("lending product rate do you want") ||
+    normalizedText.includes("timeline do you want");
+
+  const isInterestRateRoot = hasAnyAction(actions, [
+    "Deposit Rate",
+    "Lending Rate",
+  ]);
+
+  return (
+    isScheduleChargeMenu ||
+    isScheduleChargeRoot ||
+    isInterestRateMenu ||
+    isInterestRateRoot
+  );
+}
+
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -597,7 +672,10 @@ export default function Chatbot() {
     ]);
   };
 
-  const sendMessage = async (message: string) => {
+  const sendMessage = async (
+    message: string,
+    options: SendMessageOptions = {},
+  ) => {
     const userMessage = message.trim();
 
     if (!userMessage || isLoading) {
@@ -608,10 +686,9 @@ export default function Chatbot() {
     setHasStartedConversation(true);
     setShowEndConfirmation(false);
 
-    const chatWithUserMessage: Message[] = [
-      ...messages,
-      { role: "user", text: userMessage },
-    ];
+    const chatWithUserMessage: Message[] = options.silentUserMessage
+      ? [...messages]
+      : [...messages, { role: "user", text: userMessage }];
 
     setMessages(chatWithUserMessage);
     setInput("");
@@ -638,20 +715,30 @@ export default function Chatbot() {
       const botReply = data.reply ?? ERROR_MESSAGE;
       const quickActions = data.quick_actions ?? [];
       const chatId = typeof data.chat_id === "number" ? data.chat_id : undefined;
+      const botMessage: Message = {
+        role: "bot",
+        text: botReply,
+        quickActions,
+        chatId,
+      };
 
       await minimumResponseDelay;
 
-      setMessages([
-        ...chatWithUserMessage,
-        { role: "bot", text: botReply, quickActions, chatId },
-      ]);
+      setMessages(
+        options.replaceLatestBotMessage
+          ? replaceLatestBotMessage(chatWithUserMessage, botMessage)
+          : [...chatWithUserMessage, botMessage],
+      );
     } catch {
       await minimumResponseDelay;
 
-      setMessages([
-        ...chatWithUserMessage,
-        { role: "bot", text: ERROR_MESSAGE },
-      ]);
+      const errorMessage: Message = { role: "bot", text: ERROR_MESSAGE };
+
+      setMessages(
+        options.replaceLatestBotMessage
+          ? replaceLatestBotMessage(chatWithUserMessage, errorMessage)
+          : [...chatWithUserMessage, errorMessage],
+      );
     } finally {
       setIsLoading(false);
     }
@@ -660,6 +747,13 @@ export default function Chatbot() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await sendMessage(input);
+  };
+
+  const handleScopedBackNavigation = () => {
+    void sendMessage(SCOPED_BACK_MESSAGE, {
+      silentUserMessage: true,
+      replaceLatestBotMessage: true,
+    });
   };
 
   const handleFeedback = async (
@@ -775,10 +869,25 @@ export default function Chatbot() {
     );
   };
 
-  const renderServiceActionList = (actions: string[]) => (
+  const renderServiceActionList = (
+    actions: string[],
+    showScopedBack = false,
+  ) => (
     <div className="mt-2 w-full max-w-[92%] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600">
-        Select Services
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600">
+        <span>Select Services</span>
+        {showScopedBack ? (
+          <button
+            type="button"
+            onClick={handleScopedBackNavigation}
+            disabled={isLoading}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#006A4E]/10 text-sm font-semibold leading-none text-[#006A4E] transition hover:bg-[#006A4E]/15 disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Go back to previous options"
+            title="Go back"
+          >
+            {"<"}
+          </button>
+        ) : null}
       </div>
       <div className="divide-y divide-gray-200">
         {actions.map((action) => (
@@ -1062,10 +1171,15 @@ export default function Chatbot() {
                         {renderConversationFollowUp(message, index)}
                         {shouldShowQuickActions ? (
                           shouldRenderServiceActionList(message) ? (
-                            renderServiceActionList(message.quickActions)
+                            renderServiceActionList(
+                              message.quickActions ?? [],
+                              isScopedBackOptionMessage(message),
+                            )
                           ) : (
                             <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">
-                              {message.quickActions.map(renderQuickActionButton)}
+                              {(message.quickActions ?? []).map(
+                                renderQuickActionButton,
+                              )}
                             </div>
                           )
                         ) : null}
