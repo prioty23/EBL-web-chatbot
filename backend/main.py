@@ -1786,6 +1786,9 @@ def last_retail_charge_context(session_id):
 
 
 def has_recent_retail_charge_context(session_id):
+    if latest_assistant_prompt_domain(session_id) != "retail_charge":
+        return False
+
     history = get_chat_history(session_id, limit=8)
 
     for message in reversed(history):
@@ -2043,6 +2046,9 @@ def last_sme_charge_context(session_id):
 
 
 def has_recent_sme_charge_context(session_id):
+    if latest_assistant_prompt_domain(session_id) != "sme_charge":
+        return False
+
     history = get_chat_history(session_id, limit=8)
 
     for message in reversed(history):
@@ -2339,6 +2345,9 @@ def last_corporate_charge_context(session_id):
 
 
 def has_recent_corporate_charge_context(session_id):
+    if latest_assistant_prompt_domain(session_id) != "corporate_charge":
+        return False
+
     history = get_chat_history(session_id, limit=8)
 
     for message in reversed(history):
@@ -2533,6 +2542,9 @@ def last_card_charge_context(session_id):
 
 
 def recent_card_charge_context(session_id):
+    if latest_assistant_prompt_domain(session_id) != "card_charge":
+        return {}
+
     history = get_chat_history(session_id, limit=8)
 
     for message in reversed(history):
@@ -2668,6 +2680,68 @@ def last_user_message(session_id, limit=6):
     for message in reversed(history):
         if message["role"] == "user":
             return message["content"]
+
+    return ""
+
+
+def assistant_prompt_domain(reply):
+    if not reply:
+        return ""
+
+    if retail_charge_context_from_reply(reply):
+        return "retail_charge"
+
+    if sme_charge_context_from_reply(reply):
+        return "sme_charge"
+
+    if corporate_charge_context_from_reply(reply):
+        return "corporate_charge"
+
+    if card_charge_context_from_reply(reply):
+        return "card_charge"
+
+    if reply == SCHEDULE_CHARGES_MENU_REPLY:
+        return "schedule_charges"
+
+    if reply == INTEREST_RATE_TYPE_REPLY:
+        return "interest_rate"
+
+    if (
+        reply.startswith("Please specify the deposit product")
+        or "deposit product rate do you want?" in reply
+        or "timeline do you want?" in reply
+        or "Savings/CASA product rate" in reply
+        or "Retail FD product rate" in reply
+        or "DPS/recurring deposit product rate" in reply
+    ):
+        return "deposit_rate"
+
+    if reply == LENDING_RATE_PRODUCT_REPLY or "lending product rate do you want?" in reply:
+        return "lending_rate"
+
+    if reply == LOAN_CATEGORY_QUESTION or "loan category" in reply.lower():
+        return "loan"
+
+    if reply == ACCOUNT_CATEGORY_QUESTION or "account category" in reply.lower():
+        return "account"
+
+    if reply == CARD_CATEGORY_QUESTION:
+        return "card_information"
+
+    return ""
+
+
+def latest_assistant_prompt_domain(session_id, limit=12):
+    history = get_chat_history(session_id, limit=limit)
+
+    for message in reversed(history):
+        if message["role"] != "assistant":
+            continue
+
+        domain = assistant_prompt_domain(message["content"])
+
+        if domain:
+            return domain
 
     return ""
 
@@ -3157,6 +3231,19 @@ def deposit_rate_context_from_reply(reply):
     if timeline_match:
         return timeline_match.group(1).strip()
 
+    deposit_product_prompt_match = re.search(
+        r"Which (.+?) deposit product rate do you want\?",
+        reply,
+    )
+
+    if deposit_product_prompt_match:
+        prompt_context = deposit_product_prompt_match.group(1).strip()
+
+        if prompt_context.startswith("Business Unit:"):
+            return prompt_context.split(":", 1)[1].strip()
+
+        return prompt_context
+
     if "Business Unit: Retail" in reply:
         return "Retail"
 
@@ -3191,6 +3278,9 @@ def deposit_rate_context_from_reply(reply):
 
 
 def deposit_rate_prompt_context(session_id):
+    if latest_assistant_prompt_domain(session_id) != "deposit_rate":
+        return ""
+
     history = get_chat_history(session_id, limit=12)
 
     for message in reversed(history):
@@ -3432,6 +3522,40 @@ def build_interest_rate_flow_reply(session_id, user_message):
         return LENDING_RATE_PRODUCT_REPLY
 
     return ""
+
+
+def is_exact_interest_rate_type_choice(message):
+    normalized_message = normalize_literal_menu_text(message)
+
+    return normalized_message in {
+        "deposit",
+        "deposits",
+        "deposit rate",
+        "deposit rates",
+        "deposit interest rate",
+        "deposit interest rates",
+        "lending",
+        "lending rate",
+        "lending rates",
+        "lending interest rate",
+        "lending interest rates",
+    }
+
+
+def should_prioritize_interest_rate_flow(session_id, user_message):
+    if last_reply_was_interest_rate_type_prompt(session_id):
+        return True
+
+    if is_exact_interest_rate_type_choice(user_message):
+        return True
+
+    if (
+        is_broad_interest_rate_question(user_message)
+        and not last_card_charge_context(session_id)
+    ):
+        return True
+
+    return False
 
 
 def looks_like_deposit_rate_product_name(message):
@@ -6619,14 +6743,20 @@ def chat(request: ChatRequest):
             status="answered",
         )
 
-    if is_broad_interest_rate_question(user_message):
-        return save_and_build_response(
-            session_id=session_id,
-            user_message=user_message,
-            reply=INTEREST_RATE_TYPE_REPLY,
-            source="interest-rate-router",
-            status="answered",
+    if should_prioritize_interest_rate_flow(session_id, user_message):
+        priority_interest_rate_reply = build_interest_rate_flow_reply(
+            session_id,
+            user_message,
         )
+
+        if priority_interest_rate_reply:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=priority_interest_rate_reply,
+                source="interest-rate-router",
+                status="answered",
+            )
 
     early_card_charge_flow_reply = build_card_charge_flow_reply(
         session_id,
