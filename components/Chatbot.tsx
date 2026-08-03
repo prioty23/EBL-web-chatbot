@@ -29,6 +29,27 @@ type SendMessageOptions = {
 type FeedbackValue = "helpful" | "not_helpful";
 type FeedbackStatus = "saving" | "saved" | "error";
 
+type ComplaintCellContact = {
+  name: string;
+  designation: string;
+  email: string;
+  phone: string;
+};
+
+type ComplaintCellSection = {
+  title: string;
+  contacts: ComplaintCellContact[];
+};
+
+type ComplaintCellDetails = {
+  title: string;
+  email: string;
+  enquiry: string;
+  onlineForm: string;
+  source: string;
+  sections: ComplaintCellSection[];
+};
+
 const chatbotText = translations.en.chatbot;
 const CHATBOT_API_URL = "http://127.0.0.1:8000/chat";
 const CHATBOT_FEEDBACK_API_URL = "http://127.0.0.1:8000/chat/feedback";
@@ -40,9 +61,14 @@ const MAIN_MENU_QUICK_ACTIONS = [
   "Card Information",
   "Schedule of Charges",
   "Interest Rate",
+  "Complaint Cell",
   "Contact Us",
 ];
 const SCOPED_BACK_MESSAGE = "Back";
+const COMPLAINT_CELL_DEFAULT_EMAIL = "ccs.cmc@ebl-bd.com";
+const COMPLAINT_CELL_DEFAULT_FORM = "https://dgzip.ebl-bd.com/query/";
+const COMPLAINT_CELL_DEFAULT_FOOTER =
+  "Please enquire us from 10am to 5pm, SUN-THU, (Except Holidays) Or For 24 hours Contact Center: please call 16230 (from any mobile), +8809677716230 (from any local & overseas number)";
 
 const SESSION_STORAGE_KEY = "eastern_ai_session_id";
 const BOT_RESPONSE_DELAY_MS = 1400;
@@ -143,6 +169,193 @@ function RobotIcon({ className = "h-7 w-7" }: { className?: string }) {
   );
 }
 
+function QuickActionIcon({
+  action,
+  className = "h-4 w-4",
+}: {
+  action: string;
+  className?: string;
+}) {
+  const normalizedAction = action.toLowerCase();
+
+  if (normalizedAction.includes("open an account")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M4 10.5 12 5l8 5.5M6.5 10.5V18M10 10.5V18M14 10.5V18M17.5 10.5V18M4.5 18h15"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("loan")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M7 14.5h6.75a2.25 2.25 0 0 0 0-4.5H11M7 14.5l2.5-2.5M7 14.5 9.5 17M5 19.5h14M16.5 7.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("card")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <rect
+          x="4"
+          y="6.5"
+          width="16"
+          height="11"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+        <path
+          d="M4 10h16M7.5 14h3"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("branch")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M12 20s6-4.85 6-10a6 6 0 0 0-12 0c0 5.15 6 10 6 10Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M12 12.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("schedule")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M14 4.5V8h3M8 12h7M8 15.5h5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("interest")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M7.5 16.5 16.5 7.5M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM16 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("complaint")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M7 4.5h7l3 3v12H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M14 4.5V8h3M11 10.5v4M11 17h.01"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("contact")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M8.5 5.5 10 9l-2 1.5c1 2.1 2.4 3.5 5.5 5.5l1.5-2 3.5 1.5v2.25c0 .7-.55 1.25-1.25 1.25C9.55 19 5 14.45 5 6.75c0-.7.55-1.25 1.25-1.25H8.5Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return null;
+}
+
 function formatMessage(text: string) {
   const pattern =
     /(https?:\/\/[^\s]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|\+?\d[\d\s-]{7,}\d|16230)/g;
@@ -169,7 +382,7 @@ function formatMessage(text: string) {
         <a
           key={index}
           href={`mailto:${cleanPart}`}
-          className="font-semibold underline underline-offset-2"
+          className="break-all font-semibold underline underline-offset-2"
         >
           {cleanPart}
         </a>
@@ -433,6 +646,165 @@ function renderMessageContent(text: string) {
   return nodes;
 }
 
+function parseComplaintCellContent(text: string): ComplaintCellDetails {
+  const blocks = text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  const details: ComplaintCellDetails = {
+    title: blocks[0]?.replace(/:$/, "") || "EBL Complaint Cell",
+    email: "",
+    enquiry: "",
+    onlineForm: "",
+    source: "",
+    sections: [],
+  };
+
+  let currentSection: ComplaintCellSection | null = null;
+
+  for (const block of blocks.slice(1)) {
+    if (/^email address:/i.test(block)) {
+      details.email = block.replace(/^email address:\s*/i, "").trim();
+      continue;
+    }
+
+    if (/^please enquire us/i.test(block)) {
+      details.enquiry = block;
+      continue;
+    }
+
+    if (/^online query\/complaint form:/i.test(block)) {
+      details.onlineForm = block
+        .replace(/^online query\/complaint form:\s*/i, "")
+        .trim();
+      continue;
+    }
+
+    if (/^source page:/i.test(block)) {
+      details.source = block.replace(/^source page:\s*/i, "").trim();
+      continue;
+    }
+
+    if (block.endsWith(":") && !block.includes("\n")) {
+      currentSection = {
+        title: block.replace(/:$/, ""),
+        contacts: [],
+      };
+      details.sections.push(currentSection);
+      continue;
+    }
+
+    if (!currentSection) {
+      continue;
+    }
+
+    const lines = block.split(/\r?\n/).map((line) => line.trim());
+    const name = lines[0]?.replace(/^\d+\.\s*/, "").trim();
+
+    if (!name) {
+      continue;
+    }
+
+    currentSection.contacts.push({
+      name,
+      designation:
+        lines
+          .find((line) => /^designation:/i.test(line))
+          ?.replace(/^designation:\s*/i, "")
+          .trim() ?? "",
+      email:
+        lines
+          .find((line) => /^email:/i.test(line))
+          ?.replace(/^email:\s*/i, "")
+          .trim() ?? "",
+      phone:
+        lines
+          .find((line) => /^phone no\.:/i.test(line))
+          ?.replace(/^phone no\.:\s*/i, "")
+          .trim() ?? "",
+    });
+  }
+
+  return details;
+}
+
+function renderComplaintContact(contact: ComplaintCellContact, index: number) {
+  return (
+    <div key={`${contact.name}-${index}`} className="px-3 py-3">
+      <p className="text-sm font-semibold leading-5 text-[#005B43]">
+        {contact.name}
+      </p>
+      <dl className="mt-2 space-y-1.5 text-xs leading-5">
+        <div>
+          <dt className="inline font-semibold text-gray-500">Designation: </dt>
+          <dd className="inline text-gray-800">
+            {formatMessage(contact.designation)}
+          </dd>
+        </div>
+        <div>
+          <dt className="inline font-semibold text-gray-500">Email: </dt>
+          <dd className="inline break-all text-gray-800">
+            {formatMessage(contact.email)}
+          </dd>
+        </div>
+        <div>
+          <dt className="inline font-semibold text-gray-500">Phone No.: </dt>
+          <dd className="inline text-gray-800">{formatMessage(contact.phone)}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function renderComplaintCellContent(text: string) {
+  const details = parseComplaintCellContent(text);
+  const hasContactSections = details.sections.some(
+    (section) => section.contacts.length > 0,
+  );
+  const footerText = details.enquiry || COMPLAINT_CELL_DEFAULT_FOOTER;
+  const fallbackEmail = details.email || COMPLAINT_CELL_DEFAULT_EMAIL;
+  const fallbackForm = details.onlineForm || COMPLAINT_CELL_DEFAULT_FORM;
+
+  return (
+    <div className="space-y-3">
+      {hasContactSections ? (
+        details.sections.map((section) => (
+          <div
+            key={section.title}
+            className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+          >
+            <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 text-center text-xs font-semibold leading-5 text-gray-800">
+              {section.title}
+            </div>
+            <div className="divide-y divide-gray-100">
+              {section.contacts.map(renderComplaintContact)}
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="space-y-1.5 text-sm leading-6 text-white">
+          <p>
+            <span className="font-semibold">Email Address: </span>
+            {formatMessage(fallbackEmail)}
+          </p>
+          <p>
+            <span className="font-semibold">
+              Online query/complaint form:{" "}
+            </span>
+            {formatMessage(fallbackForm)}
+          </p>
+        </div>
+      )}
+      <div className="rounded-xl border border-[#F0C84B] bg-[#FFF8D8] px-3 py-2.5 shadow-sm">
+        <p className="text-xs font-semibold leading-5 text-[#4B3A00]">
+          {formatMessage(footerText)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function isFeedbackPromptText(text: string) {
   const normalizedText = text.trim().toLowerCase();
 
@@ -522,6 +894,27 @@ function hasAnyAction(actions: string[] | undefined, expectedActions: string[]) 
   const actionSet = new Set(actions.map((action) => action.toLowerCase()));
 
   return expectedActions.some((action) => actionSet.has(action.toLowerCase()));
+}
+
+function isMainMenuQuickAction(action: string) {
+  return MAIN_MENU_QUICK_ACTIONS.some(
+    (mainAction) => mainAction.toLowerCase() === action.toLowerCase(),
+  );
+}
+
+function isMainMenuQuickActionList(actions: string[] | undefined) {
+  if (!actions?.length) {
+    return false;
+  }
+
+  return actions.every(isMainMenuQuickAction);
+}
+
+function shouldSpanMainMenuAction(action: string) {
+  return (
+    MAIN_MENU_QUICK_ACTIONS.length % 2 === 1 &&
+    MAIN_MENU_QUICK_ACTIONS[MAIN_MENU_QUICK_ACTIONS.length - 1] === action
+  );
 }
 
 function hasMenuSource(message: Message, sources: Set<string>) {
@@ -867,19 +1260,41 @@ export default function Chatbot() {
     }
   };
 
-  const renderQuickActionButton = (action: string) => (
-    <button
-      key={action}
-      type="button"
-      onClick={() => {
-        void sendMessage(action);
-      }}
-      disabled={isLoading}
-      className="rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {action}
-    </button>
-  );
+  const renderQuickActionButton = (action: string) => {
+    const isMainAction = isMainMenuQuickAction(action);
+    const spansMainRow = isMainAction && shouldSpanMainMenuAction(action);
+
+    return (
+      <button
+        key={action}
+        type="button"
+        onClick={() => {
+          void sendMessage(action);
+        }}
+        disabled={isLoading}
+        className={
+          isMainAction
+            ? `flex min-h-11 w-full items-center gap-2 rounded-full border border-[#006A4E]/70 bg-white px-3 py-2 text-left text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60 ${
+                spansMainRow ? "col-span-2 justify-center text-center" : ""
+              }`
+            : "rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+        }
+      >
+        {isMainAction ? (
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[#006A4E]">
+            <QuickActionIcon action={action} />
+          </span>
+        ) : null}
+        <span
+          className={
+            isMainAction && !spansMainRow ? "min-w-0 flex-1" : "min-w-0"
+          }
+        >
+          {action}
+        </span>
+      </button>
+    );
+  };
 
   const shouldRenderServiceActionList = (message: Message) => {
     return isScopedOptionMenuMessage(message);
@@ -1162,6 +1577,9 @@ export default function Chatbot() {
                     const isCorporateTableMessage =
                       message.role === "bot" &&
                       messageHasCorporateChargeTable(message.text);
+                    const isComplaintCellMessage =
+                      message.role === "bot" &&
+                      message.source === "complaint-cell-agent";
 
                     return (
                       <div key={`${message.role}-${index}`}>
@@ -1172,7 +1590,7 @@ export default function Chatbot() {
                         ) : null}
                         <div
                           className={`${
-                            isCorporateTableMessage
+                            isCorporateTableMessage || isComplaintCellMessage
                               ? "max-w-full rounded-xl px-2.5 py-2.5"
                               : "max-w-[88%] rounded-2xl px-4 py-3"
                           } text-sm leading-6 shadow-sm ${
@@ -1181,7 +1599,9 @@ export default function Chatbot() {
                               : "ml-auto bg-gray-100 text-gray-700"
                           }`}
                         >
-                          {renderMessageContent(message.text)}
+                          {isComplaintCellMessage
+                            ? renderComplaintCellContent(message.text)
+                            : renderMessageContent(message.text)}
                         </div>
                         {renderFeedbackControls(message, index)}
                         {renderConversationFollowUp(message, index)}
@@ -1192,7 +1612,15 @@ export default function Chatbot() {
                               isScopedOptionMenuMessage(message),
                             )
                           ) : (
-                            <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">
+                            <div
+                              className={
+                                isMainMenuQuickActionList(
+                                  message.quickActions,
+                                )
+                                  ? "mt-3 grid max-w-[92%] grid-cols-2 gap-2.5"
+                                  : "mt-2 flex max-w-[92%] flex-wrap gap-2"
+                              }
+                            >
                               {(message.quickActions ?? []).map(
                                 renderQuickActionButton,
                               )}

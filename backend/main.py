@@ -17,6 +17,7 @@ from email_sender import send_final_status_email
 from complaint_email_scheduler import start_complaint_email_scheduler
 from charge_excel_scheduler import start_charge_excel_scheduler
 from rate_excel_scheduler import start_rate_excel_scheduler
+from complaint_cell_scraper import build_complaint_cell_reply
 
 from safety import contains_sensitive_data, get_safety_response
 
@@ -223,6 +224,7 @@ MAIN_QUICK_ACTIONS = [
     "Card Information",
     "Schedule of Charges",
     "Interest Rate",
+    "Complaint Cell",
     "Contact Us",
 ]
 SCHEDULE_CHARGE_QUICK_ACTIONS = [
@@ -1530,6 +1532,26 @@ def literal_schedule_charge_menu_choice(message):
     }
 
     return menu_aliases.get(normalized_message, "")
+
+
+def is_complaint_cell_request(message):
+    normalized_message = normalize_literal_menu_text(message)
+
+    return normalized_message in {
+        "complaint cell",
+        "complaintcell",
+        "ebl complaint cell",
+        "complaint cell info",
+        "complaint cell information",
+        "complaint cell contact",
+        "complaint cell contacts",
+        "complaint management cell",
+        "customer service complaint management cell",
+        "query complaint",
+        "ebl query complaint",
+        "complaint link",
+        "complaint page",
+    }
 
 
 def is_schedule_charges_menu_request(message):
@@ -6470,7 +6492,7 @@ WEBSITE_PAGES = [
     },
     {
         "page_name": "EBL Complaint Cell Page",
-        "page_url": "https://www.ebl.com.bd/complaint-cell",
+        "page_url": "https://www.ebl.com.bd/regulatory/complaintcell",
     },
 ]
 
@@ -6912,6 +6934,15 @@ def chat(request: ChatRequest):
             reply=get_greeting_reply(),
             source="greeting-handler",
             status="greeting",
+        )
+
+    if is_complaint_cell_request(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_complaint_cell_reply(),
+            source="complaint-cell-agent",
+            status="answered",
         )
 
     if is_schedule_charges_menu_request(user_message):
