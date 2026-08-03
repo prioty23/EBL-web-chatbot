@@ -227,10 +227,11 @@ MAIN_QUICK_ACTIONS = [
     "Open an Account",
     "Loan Information",
     "Card Information",
+    "Complaint Cell",
     "Schedule of Charges",
     "Interest Rate",
-    "Complaint Cell",
     "Contact Us",
+    "Locate Us",
 ]
 SCHEDULE_CHARGE_QUICK_ACTIONS = [
     "Retail Charges",

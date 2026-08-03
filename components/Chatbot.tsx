@@ -59,10 +59,11 @@ const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
   "Card Information",
+  "Complaint Cell",
   "Schedule of Charges",
   "Interest Rate",
-  "Complaint Cell",
   "Contact Us",
+  "Locate Us",
 ];
 const SCOPED_BACK_MESSAGE = "Back";
 const COMPLAINT_CELL_DEFAULT_EMAIL = "ccs.cmc@ebl-bd.com";
@@ -178,7 +179,10 @@ function QuickActionIcon({
 }) {
   const normalizedAction = action.toLowerCase();
 
-  if (normalizedAction.includes("open an account")) {
+  if (
+    normalizedAction.includes("open account") ||
+    normalizedAction.includes("open an account")
+  ) {
     return (
       <svg
         aria-hidden="true"
@@ -243,7 +247,7 @@ function QuickActionIcon({
     );
   }
 
-  if (normalizedAction.includes("branch")) {
+  if (normalizedAction.includes("branch") || normalizedAction.includes("locate")) {
     return (
       <svg
         aria-hidden="true"
@@ -910,13 +914,6 @@ function isMainMenuQuickActionList(actions: string[] | undefined) {
   return actions.every(isMainMenuQuickAction);
 }
 
-function shouldSpanMainMenuAction(action: string) {
-  return (
-    MAIN_MENU_QUICK_ACTIONS.length % 2 === 1 &&
-    MAIN_MENU_QUICK_ACTIONS[MAIN_MENU_QUICK_ACTIONS.length - 1] === action
-  );
-}
-
 function hasMenuSource(message: Message, sources: Set<string>) {
   return Boolean(message.source && sources.has(message.source));
 }
@@ -1262,21 +1259,22 @@ export default function Chatbot() {
 
   const renderQuickActionButton = (action: string) => {
     const isMainAction = isMainMenuQuickAction(action);
-    const spansMainRow = isMainAction && shouldSpanMainMenuAction(action);
 
     return (
       <button
         key={action}
         type="button"
         onClick={() => {
+          if (action.toLowerCase() === "locate us") {
+            return;
+          }
+
           void sendMessage(action);
         }}
         disabled={isLoading}
         className={
           isMainAction
-            ? `flex min-h-11 w-full items-center gap-2 rounded-full border border-[#006A4E]/70 bg-white px-3 py-2 text-left text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60 ${
-                spansMainRow ? "col-span-2 justify-center text-center" : ""
-              }`
+            ? "flex min-h-11 w-full items-center gap-2 rounded-full border border-[#006A4E]/70 bg-white px-3 py-2 text-left text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
             : "rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
         }
       >
@@ -1285,13 +1283,7 @@ export default function Chatbot() {
             <QuickActionIcon action={action} />
           </span>
         ) : null}
-        <span
-          className={
-            isMainAction && !spansMainRow ? "min-w-0 flex-1" : "min-w-0"
-          }
-        >
-          {action}
-        </span>
+        <span className="min-w-0 flex-1">{action}</span>
       </button>
     );
   };
