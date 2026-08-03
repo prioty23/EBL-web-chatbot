@@ -186,6 +186,18 @@ def build_complaint_cell_fallback_reply():
     ])
 
 
+def build_complaint_cell_email_reply():
+    return f"Complaint Cell email: {DEFAULT_COMPLAINT_CELL_EMAIL}"
+
+
+def build_complaint_cell_form_reply():
+    return f"Online query/complaint form: {DEFAULT_QUERY_COMPLAINT_LINK}"
+
+
+def build_complaint_cell_enquiry_reply():
+    return DEFAULT_COMPLAINT_CELL_FOOTER
+
+
 def build_intro_details(general_email, enquiry_text, query_complaint_link):
     detail_lines = []
     general_email = general_email or DEFAULT_COMPLAINT_CELL_EMAIL

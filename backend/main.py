@@ -17,7 +17,12 @@ from email_sender import send_final_status_email
 from complaint_email_scheduler import start_complaint_email_scheduler
 from charge_excel_scheduler import start_charge_excel_scheduler
 from rate_excel_scheduler import start_rate_excel_scheduler
-from complaint_cell_scraper import build_complaint_cell_reply
+from complaint_cell_scraper import (
+    build_complaint_cell_reply,
+    build_complaint_cell_email_reply,
+    build_complaint_cell_form_reply,
+    build_complaint_cell_enquiry_reply,
+)
 
 from safety import contains_sensitive_data, get_safety_response
 
@@ -1532,6 +1537,84 @@ def literal_schedule_charge_menu_choice(message):
     }
 
     return menu_aliases.get(normalized_message, "")
+
+
+def is_complaint_cell_context(normalized_message):
+    words = set(normalized_message.split())
+
+    return (
+        ("complaint" in words and "cell" in words)
+        or "complaintcell" in normalized_message
+        or "complaint management" in normalized_message
+        or "customer service complaint management cell" in normalized_message
+        or "central customer service complaint management cell" in normalized_message
+    )
+
+
+def is_complaint_cell_email_request(message):
+    normalized_message = normalize_literal_menu_text(message)
+    words = set(normalized_message.split())
+
+    if normalized_message in {
+        "complaint mail",
+        "complaint email",
+        "complaint mail address",
+        "complaint email address",
+        "complain mail",
+        "complain email",
+        "complain mail address",
+        "complain email address",
+        "ebl complaint mail",
+        "ebl complaint email",
+        "complaint cell mail",
+        "complaint cell email",
+        "complaintcell mail",
+        "complaintcell email",
+        "ebl complaint cell mail",
+        "ebl complaint cell email",
+        "complaint management cell mail",
+        "complaint management cell email",
+    }:
+        return True
+
+    return is_complaint_cell_context(normalized_message) and bool(
+        {"mail", "email"} & words
+    )
+
+
+def is_complaint_cell_form_request(message):
+    normalized_message = normalize_literal_menu_text(message)
+    words = set(normalized_message.split())
+
+    if normalized_message in {
+        "complaint form",
+        "complaint link",
+        "complaint page",
+        "query complaint",
+        "query complaint form",
+        "query complaint link",
+        "ebl query complaint",
+        "ebl query complaint form",
+        "online complaint form",
+        "online query complaint form",
+        "complaint cell form",
+        "complaint cell link",
+        "complaint cell page",
+    }:
+        return True
+
+    return is_complaint_cell_context(normalized_message) and bool(
+        {"form", "link", "page"} & words
+    )
+
+
+def is_complaint_cell_enquiry_request(message):
+    normalized_message = normalize_literal_menu_text(message)
+    words = set(normalized_message.split())
+
+    return is_complaint_cell_context(normalized_message) and bool(
+        {"phone", "number", "hotline", "hour", "hours", "time", "enquiry", "inquiry"} & words
+    )
 
 
 def is_complaint_cell_request(message):
@@ -6934,6 +7017,33 @@ def chat(request: ChatRequest):
             reply=get_greeting_reply(),
             source="greeting-handler",
             status="greeting",
+        )
+
+    if is_complaint_cell_email_request(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_complaint_cell_email_reply(),
+            source="complaint-cell-direct-agent",
+            status="answered",
+        )
+
+    if is_complaint_cell_form_request(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_complaint_cell_form_reply(),
+            source="complaint-cell-direct-agent",
+            status="answered",
+        )
+
+    if is_complaint_cell_enquiry_request(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_complaint_cell_enquiry_reply(),
+            source="complaint-cell-direct-agent",
+            status="answered",
         )
 
     if is_complaint_cell_request(user_message):
