@@ -7,6 +7,7 @@ import type { FormEvent, ReactNode } from "react";
 type Message = {
   role: "bot" | "user";
   text: string;
+  source?: string;
   quickActions?: string[];
   chatId?: number;
   feedback?: FeedbackValue;
@@ -15,6 +16,7 @@ type Message = {
 
 type ChatApiResponse = {
   reply?: string;
+  source?: string;
   quick_actions?: string[];
   chat_id?: number;
 };
@@ -44,6 +46,19 @@ const SCOPED_BACK_MESSAGE = "Back";
 
 const SESSION_STORAGE_KEY = "eastern_ai_session_id";
 const BOT_RESPONSE_DELAY_MS = 1400;
+const SCHEDULE_CHARGE_MENU_SOURCES = new Set([
+  "schedule-charges-menu",
+  "schedule-charges-category-menu",
+  "retail-charge-menu",
+  "sme-charge-menu",
+  "corporate-charge-menu",
+  "card-charge-menu",
+]);
+const INTEREST_RATE_MENU_SOURCES = new Set([
+  "interest-rate-router",
+  "deposit-rate-database",
+  "lending-rate-database",
+]);
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -509,24 +524,12 @@ function hasAnyAction(actions: string[] | undefined, expectedActions: string[]) 
   return expectedActions.some((action) => actionSet.has(action.toLowerCase()));
 }
 
-function isScopedBackOptionMessage(message: Message | null) {
-  if (!message || message.role !== "bot" || !message.quickActions?.length) {
-    return false;
-  }
+function hasMenuSource(message: Message, sources: Set<string>) {
+  return Boolean(message.source && sources.has(message.source));
+}
 
-  const normalizedText = message.text.toLowerCase();
-  const actions = message.quickActions;
-
-  const isScheduleChargeMenu =
-    normalizedText.includes("banking charge") ||
-    normalizedText.includes("retail charge") ||
-    normalizedText.includes("sme charge") ||
-    normalizedText.includes("corporate charge") ||
-    normalizedText.includes("card charge") ||
-    normalizedText.includes("product do you want for charges") ||
-    normalizedText.includes("charge do you want for") ||
-    normalizedText.includes("service do you want");
-
+function isScheduleChargeOptionText(text: string, actions?: string[]) {
+  const normalizedText = text.toLowerCase();
   const isScheduleChargeRoot = hasAnyAction(actions, [
     "Retail Charges",
     "SME Charges",
@@ -534,24 +537,62 @@ function isScopedBackOptionMessage(message: Message | null) {
     "Card Charges",
   ]);
 
-  const isInterestRateMenu =
-    normalizedText.includes("interest rate do you want") ||
-    normalizedText.includes("deposit rate category") ||
-    normalizedText.includes("lending rate category") ||
-    normalizedText.includes("deposit product rate do you want") ||
-    normalizedText.includes("lending product rate do you want") ||
-    normalizedText.includes("timeline do you want");
+  return (
+    isScheduleChargeRoot ||
+    normalizedText.includes("banking charge do you want") ||
+    normalizedText.includes("specific retail charge") ||
+    normalizedText.includes("specific sme charge") ||
+    normalizedText.includes("specific corporate charge") ||
+    normalizedText.includes("specific card charge") ||
+    normalizedText.includes("retail charge category do you want") ||
+    normalizedText.includes("retail charge subcategory do you want") ||
+    normalizedText.includes("sme charge category do you want") ||
+    normalizedText.includes("sme charge subcategory do you want") ||
+    normalizedText.includes("sme loan charge do you want") ||
+    normalizedText.includes("sme certificate/report service do you want") ||
+    normalizedText.includes("sme cheque/clearing service do you want") ||
+    normalizedText.includes("corporate charge category do you want") ||
+    normalizedText.includes("corporate charge subcategory do you want") ||
+    normalizedText.includes("card charge type do you want") ||
+    normalizedText.includes("product do you want for charges") ||
+    normalizedText.includes("product/account type do you want") ||
+    normalizedText.includes("charge do you want for") ||
+    normalizedText.includes("charge do you want") ||
+    normalizedText.includes("service do you want") ||
+    normalizedText.startsWith("please specify the exact charge") ||
+    normalizedText.startsWith("please specify the product/account type")
+  );
+}
 
+function isInterestRateOptionText(text: string, actions?: string[]) {
+  const normalizedText = text.toLowerCase();
   const isInterestRateRoot = hasAnyAction(actions, [
     "Deposit Rate",
     "Lending Rate",
   ]);
 
   return (
-    isScheduleChargeMenu ||
-    isScheduleChargeRoot ||
-    isInterestRateMenu ||
-    isInterestRateRoot
+    isInterestRateRoot ||
+    normalizedText.includes("interest rate do you want") ||
+    normalizedText.includes("deposit rate category") ||
+    normalizedText.includes("lending rate category") ||
+    normalizedText.includes("deposit product rate do you want") ||
+    normalizedText.includes("lending product rate do you want") ||
+    normalizedText.includes("product rate do you want") ||
+    normalizedText.includes("timeline do you want")
+  );
+}
+
+function isScopedOptionMenuMessage(message: Message | null) {
+  if (!message || message.role !== "bot" || !message.quickActions?.length) {
+    return false;
+  }
+
+  return (
+    hasMenuSource(message, SCHEDULE_CHARGE_MENU_SOURCES) ||
+    hasMenuSource(message, INTEREST_RATE_MENU_SOURCES) ||
+    isScheduleChargeOptionText(message.text, message.quickActions) ||
+    isInterestRateOptionText(message.text, message.quickActions)
   );
 }
 
@@ -639,6 +680,7 @@ export default function Chatbot() {
       {
         role: "bot",
         text: chatbotText.welcome,
+        source: "greeting-handler",
         quickActions: MAIN_MENU_QUICK_ACTIONS,
       },
     ]);
@@ -667,6 +709,7 @@ export default function Chatbot() {
       {
         role: "bot",
         text: productMenu.text,
+        source: productMenu.source,
         quickActions: productMenu.quickActions,
       },
     ]);
@@ -718,6 +761,7 @@ export default function Chatbot() {
       const botMessage: Message = {
         role: "bot",
         text: botReply,
+        source: data.source,
         quickActions,
         chatId,
       };
@@ -838,35 +882,7 @@ export default function Chatbot() {
   );
 
   const shouldRenderServiceActionList = (message: Message) => {
-    const normalizedText = message.text.toLowerCase();
-    const actions = message.quickActions ?? [];
-
-    return Boolean(
-      actions.length > 0 &&
-        (normalizedText.includes("select a deposit rate category") ||
-          normalizedText.includes("select a lending rate category") ||
-          normalizedText.includes("deposit product rate do you want") ||
-          normalizedText.includes("timeline do you want") ||
-          normalizedText.includes("retail charge category do you want") ||
-          normalizedText.includes("retail charge subcategory do you want") ||
-          normalizedText.includes("sme charge category do you want") ||
-          normalizedText.includes("sme charge subcategory do you want") ||
-          normalizedText.includes("sme loan charge do you want") ||
-          normalizedText.includes("sme certificate/report service do you want") ||
-          normalizedText.includes("sme cheque/clearing service do you want") ||
-          normalizedText.includes("corporate charge category do you want") ||
-          normalizedText.includes("corporate charge subcategory do you want") ||
-          (normalizedText.includes("corporate") &&
-            normalizedText.includes("service do you want")) ||
-          (normalizedText.includes("corporate") &&
-            normalizedText.includes("charge do you want")) ||
-          normalizedText.includes("card charge type do you want") ||
-          normalizedText.includes("card product do you want for charges") ||
-          (normalizedText.includes("card") &&
-            normalizedText.includes("charge do you want for")) ||
-          normalizedText.includes("product/account type do you want") ||
-          normalizedText.includes("charge do you want for")),
-    );
+    return isScopedOptionMenuMessage(message);
   };
 
   const renderServiceActionList = (
@@ -1173,7 +1189,7 @@ export default function Chatbot() {
                           shouldRenderServiceActionList(message) ? (
                             renderServiceActionList(
                               message.quickActions ?? [],
-                              isScopedBackOptionMessage(message),
+                              isScopedOptionMenuMessage(message),
                             )
                           ) : (
                             <div className="mt-2 flex max-w-[92%] flex-wrap gap-2">

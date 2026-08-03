@@ -1518,6 +1518,20 @@ def literal_schedule_charge_menu_category(message):
     return menu_aliases.get(normalized_message, "")
 
 
+def literal_schedule_charge_menu_choice(message):
+    normalized_message = normalize_literal_menu_text(message)
+    menu_aliases = {
+        "retail": "retail",
+        "sme": "sme",
+        "corp": "corporate",
+        "corporate": "corporate",
+        "card": "cards",
+        "cards": "cards",
+    }
+
+    return menu_aliases.get(normalized_message, "")
+
+
 def is_schedule_charges_menu_request(message):
     normalized_message = normalize_menu_text(message)
 
@@ -1663,6 +1677,25 @@ def build_schedule_charge_category_reply(category):
         f"Which specific {category_label} charge do you want to know? "
         "Please type the charge name, for example account maintenance fee, "
         "cheque book fee, credit report fee, annual fee, or cash withdrawal fee."
+    )
+
+
+def build_schedule_charge_menu_selection(category):
+    if category == "retail":
+        return build_retail_charge_group_reply(), "retail-charge-menu"
+
+    if category == "sme":
+        return build_sme_charge_group_reply(), "sme-charge-menu"
+
+    if category == "corporate":
+        return build_corporate_charge_group_reply(), "corporate-charge-menu"
+
+    if category == "cards":
+        return build_card_charge_type_reply(), "card-charge-menu"
+
+    return (
+        build_schedule_charge_category_reply(category),
+        "schedule-charges-category-menu",
     )
 
 
@@ -3682,6 +3715,9 @@ def should_prioritize_interest_rate_flow(session_id, user_message):
         return True
 
     if is_exact_interest_rate_type_choice(user_message):
+        if latest_assistant_prompt_domain(session_id) in SCHEDULE_BACK_DOMAINS:
+            return False
+
         return True
 
     if (
@@ -6900,6 +6936,20 @@ def chat(request: ChatRequest):
                 skip_scoped_navigation_push=True,
             )
 
+    if latest_assistant_prompt_domain(session_id) == "schedule_charges":
+        schedule_menu_choice = literal_schedule_charge_menu_choice(user_message)
+
+        if schedule_menu_choice:
+            reply, source = build_schedule_charge_menu_selection(schedule_menu_choice)
+
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=reply,
+                source=source,
+                status="answered",
+            )
+
     if should_prioritize_interest_rate_flow(session_id, user_message):
         priority_interest_rate_reply = build_interest_rate_flow_reply(
             session_id,
@@ -6949,18 +6999,9 @@ def chat(request: ChatRequest):
     literal_schedule_category = literal_schedule_charge_menu_category(user_message)
 
     if literal_schedule_category:
-        if literal_schedule_category == "retail":
-            reply = build_retail_charge_group_reply()
-            source = "retail-charge-menu"
-        elif literal_schedule_category == "sme":
-            reply = build_sme_charge_group_reply()
-            source = "sme-charge-menu"
-        elif literal_schedule_category == "corporate":
-            reply = build_corporate_charge_group_reply()
-            source = "corporate-charge-menu"
-        else:
-            reply = build_card_charge_type_reply()
-            source = "card-charge-menu"
+        reply, source = build_schedule_charge_menu_selection(
+            literal_schedule_category,
+        )
 
         return save_and_build_response(
             session_id=session_id,
@@ -6976,33 +7017,6 @@ def chat(request: ChatRequest):
         not is_bare_schedule_charge_category(user_message)
         or last_reply_was_schedule_charges_menu(session_id)
     ):
-        if schedule_charge_category == "retail":
-            return save_and_build_response(
-                session_id=session_id,
-                user_message=user_message,
-                reply=build_retail_charge_group_reply(),
-                source="retail-charge-menu",
-                status="answered",
-            )
-
-        if schedule_charge_category == "sme":
-            return save_and_build_response(
-                session_id=session_id,
-                user_message=user_message,
-                reply=build_sme_charge_group_reply(),
-                source="sme-charge-menu",
-                status="answered",
-            )
-
-        if schedule_charge_category == "corporate":
-            return save_and_build_response(
-                session_id=session_id,
-                user_message=user_message,
-                reply=build_corporate_charge_group_reply(),
-                source="corporate-charge-menu",
-                status="answered",
-            )
-
         if schedule_charge_category == "cards":
             card_category = card_charge_category_label(user_message)
             reply = (
@@ -7019,11 +7033,13 @@ def chat(request: ChatRequest):
                 status="answered",
             )
 
+        reply, source = build_schedule_charge_menu_selection(schedule_charge_category)
+
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
-            reply=build_schedule_charge_category_reply(schedule_charge_category),
-            source="schedule-charges-category-menu",
+            reply=reply,
+            source=source,
             status="answered",
         )
 
