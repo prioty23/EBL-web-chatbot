@@ -1,6 +1,8 @@
 """Backend entrypoint."""
 
 import re
+from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException
@@ -151,6 +153,18 @@ from charge_database import (
     sme_charge_product_matches,
     sme_charge_products,
 )
+
+
+BASE_DIR = Path(__file__).resolve().parent
+CHARGE_METADATA_PATHS = [
+    BASE_DIR / "charge_data",
+]
+RATE_METADATA_PATHS = [
+    BASE_DIR / "deposit_rate_data",
+    BASE_DIR / "lending_rate_data",
+    BASE_DIR / "rate_data",
+]
+DATA_METADATA_EXTENSIONS = {".csv", ".xlsx"}
 
 from deposit_rate_database import (
     answer_deposit_rate_question_from_db,
@@ -3237,7 +3251,13 @@ def get_bare_banking_segment(message):
 
 
 def build_bare_banking_segment_reply(session_id, user_message):
+    if detect_specific_loan_product(user_message):
+        return ""
+
     if detect_specific_account_product(user_message):
+        return ""
+
+    if looks_like_deposit_rate_product_name(user_message):
         return ""
 
     segment = get_bare_banking_segment(user_message)
@@ -7063,6 +7083,89 @@ def display_reply_for_quick_actions(reply, quick_actions):
     return strip_quick_action_bullets(reply, quick_actions)
 
 
+def iter_metadata_files(paths):
+    for path in paths:
+        if path.is_file() and path.suffix.lower() in DATA_METADATA_EXTENSIONS:
+            yield path
+            continue
+
+        if not path.is_dir():
+            continue
+
+        for file_path in path.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in DATA_METADATA_EXTENSIONS:
+                yield file_path
+
+
+def newest_metadata_date(paths):
+    newest_timestamp = None
+
+    for file_path in iter_metadata_files(paths):
+        timestamp = file_path.stat().st_mtime
+
+        if newest_timestamp is None or timestamp > newest_timestamp:
+            newest_timestamp = timestamp
+
+    if newest_timestamp is None:
+        return "Not available"
+
+    return datetime.fromtimestamp(newest_timestamp).strftime("%Y-%m-%d")
+
+
+def response_metadata_for_source(source):
+    schedule_charge_sources = {
+        "charge-database",
+        "retail-charge-menu",
+        "sme-charge-menu",
+        "corporate-charge-menu",
+        "card-charge-menu",
+    }
+    interest_rate_sources = {
+        "deposit-rate-database",
+        "lending-rate-database",
+        "interest-rate-router",
+    }
+
+    if source in schedule_charge_sources:
+        return (
+            "Source: EBL Schedule of Charges\n"
+            f"Last updated: {newest_metadata_date(CHARGE_METADATA_PATHS)}"
+        )
+
+    if source in interest_rate_sources:
+        return (
+            "Source: EBL Interest Rate\n"
+            f"Last updated: {newest_metadata_date(RATE_METADATA_PATHS)}"
+        )
+
+    return ""
+
+
+def should_append_source_metadata(source, status, blocked, quick_actions):
+    if blocked or status != "answered":
+        return False
+
+    if quick_actions:
+        return False
+
+    return bool(response_metadata_for_source(source))
+
+
+def append_source_metadata(reply, source, status, blocked, quick_actions):
+    if not should_append_source_metadata(source, status, blocked, quick_actions):
+        return reply
+
+    if "Last updated:" in reply:
+        return reply
+
+    metadata = response_metadata_for_source(source)
+
+    if not metadata:
+        return reply
+
+    return f"{reply.strip()}\n\n{metadata}"
+
+
 def build_response(reply, source, blocked=False, quick_actions=None, chat_id=None):
     return ChatResponse(
         reply=reply,
@@ -7099,6 +7202,14 @@ def save_and_build_response(
                 source,
                 response_quick_actions,
             )
+
+    reply = append_source_metadata(
+        reply,
+        source,
+        status,
+        blocked,
+        response_quick_actions,
+    )
 
     chat_id = save_chat(
         session_id=session_id,

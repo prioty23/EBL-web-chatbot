@@ -595,6 +595,35 @@ function renderMarkdownTable(headers: string[], rows: string[][], key: string) {
   );
 }
 
+function isSourceMetadataLine(line: string) {
+  return /^Source:\s+EBL\s+/i.test(line.trim());
+}
+
+function isLastUpdatedMetadataLine(line: string) {
+  return /^Last updated:/i.test(line.trim());
+}
+
+function renderSourceMetadataBlock(sourceLine: string, updatedLine: string, key: string) {
+  const sourceText = sourceLine.replace(/^Source:\s*/i, "").trim();
+  const updatedText = updatedLine.replace(/^Last updated:\s*/i, "").trim();
+
+  return (
+    <div
+      key={key}
+      className="mt-3 rounded-xl border border-[#F2D46B] bg-[#FFF7D6] px-3 py-2.5 text-[#4B3A00] shadow-sm"
+    >
+      <p className="text-xs font-semibold leading-5">
+        <span>Source: </span>
+        <span>{formatMessage(sourceText)}</span>
+      </p>
+      <p className="mt-0.5 text-xs font-semibold leading-5">
+        <span>Last updated: </span>
+        <span>{formatMessage(updatedText)}</span>
+      </p>
+    </div>
+  );
+}
+
 function renderMessageContent(text: string) {
   const lines = text.split(/\r?\n/);
   const nodes: ReactNode[] = [];
@@ -621,6 +650,23 @@ function renderMessageContent(text: string) {
   let index = 0;
 
   while (index < lines.length) {
+    if (
+      isSourceMetadataLine(lines[index]) &&
+      index + 1 < lines.length &&
+      isLastUpdatedMetadataLine(lines[index + 1])
+    ) {
+      flushTextBuffer();
+      nodes.push(
+        renderSourceMetadataBlock(
+          lines[index],
+          lines[index + 1],
+          `metadata-${nodes.length}`,
+        ),
+      );
+      index += 2;
+      continue;
+    }
+
     if (
       isMarkdownTableLine(lines[index]) &&
       index + 1 < lines.length &&
