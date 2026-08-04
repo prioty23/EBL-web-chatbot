@@ -3237,6 +3237,9 @@ def get_bare_banking_segment(message):
 
 
 def build_bare_banking_segment_reply(session_id, user_message):
+    if detect_specific_account_product(user_message):
+        return ""
+
     segment = get_bare_banking_segment(user_message)
 
     if not segment:
@@ -3954,6 +3957,8 @@ def has_document_word(message, include_need=True):
     document_words = [
         "document",
         "documents",
+        "paper",
+        "papers",
         "required",
         "requirement",
         "requirements",
@@ -3986,6 +3991,13 @@ def is_broad_account_opening_question(message):
     return any(phrase in message for phrase in broad_phrases)
 
 
+def is_account_menu_reset_request(message):
+    return normalize_literal_menu_text(message) in {
+        "open account",
+        "open an account",
+    }
+
+
 def clean_document_line(line):
     replacements = {
         "\u2018": "'",
@@ -4014,7 +4026,9 @@ def is_required_document_heading(line):
     lower_line = line.lower().rstrip(":")
 
     return (
-        lower_line == "required documents for account opening"
+        lower_line == "required document"
+        or lower_line == "required documents"
+        or lower_line == "required documents for account opening"
         or lower_line == "documents required to open account"
         or lower_line.startswith("required documents to open")
         or lower_line.startswith("documents required to open")
@@ -4697,6 +4711,9 @@ def detect_account_segment(message):
     if "sme" in words or "business" in words or "institutional" in words:
         return "sme"
 
+    if "islamic" in words or "shariah" in words or "sharia" in words:
+        return "islamic"
+
     if "retail" in words:
         return "retail"
 
@@ -4704,6 +4721,20 @@ def detect_account_segment(message):
         return "retail"
 
     return ""
+
+
+def is_account_segment_selection(message):
+    return normalize_loan_lookup_text(message) in {
+        "retail",
+        "retail account",
+        "retail accounts",
+        "sme",
+        "sme account",
+        "sme accounts",
+        "islamic",
+        "islamic account",
+        "islamic accounts",
+    }
 
 
 def detect_account_category(message):
@@ -4768,15 +4799,18 @@ def detect_specific_account_product(message):
     category = detect_account_category(message)
 
     for product in ACCOUNT_PRODUCT_RULES:
-        for alias in product["aliases"]:
-            if alias.lower().startswith("ebl ") and contains_loan_lookup_phrase(message, alias):
+        for alias in [product["name"], *product["aliases"]]:
+            if (
+                alias.lower().startswith("ebl ")
+                and contains_loan_lookup_phrase(message, alias)
+            ):
                 return product
 
     for product in ACCOUNT_PRODUCT_RULES:
         if category and product["category"] != category:
             continue
 
-        for alias in product["aliases"]:
+        for alias in [product["name"], *product["aliases"]]:
             if contains_loan_lookup_phrase(message, alias):
                 return product
 
@@ -4852,8 +4886,87 @@ def detect_account_product_from_history(history):
         content = item.get("content", "").lower()
 
         for product in ACCOUNT_PRODUCT_RULES:
+            product_url = product.get("url", "").lower()
+
+            if product_url and product_url in content:
+                return product
+
+        for product in ACCOUNT_PRODUCT_RULES:
             if product["name"].lower() in content:
                 return product
+
+    return None
+
+
+def account_product_matches_schedule(product, schedule):
+    if schedule == "SME":
+        return product["category"] == "sme_deposit"
+
+    if schedule == "Retail":
+        return product["category"] not in {"sme_deposit", "islamic_deposit"}
+
+    if schedule == "Islamic":
+        return product["category"] == "islamic_deposit"
+
+    return True
+
+
+def account_product_candidate_matches_message(product, message):
+    normalized_message = normalize_loan_lookup_text(message)
+
+    if not normalized_message:
+        return False
+
+    candidates = [product["name"], *product["aliases"]]
+
+    for candidate in candidates:
+        normalized_candidate = normalize_loan_lookup_text(candidate)
+
+        if not normalized_candidate:
+            continue
+
+        if normalized_candidate == normalized_message:
+            return True
+
+        if normalized_candidate.endswith(f" {normalized_message}"):
+            return True
+
+    return False
+
+
+def detect_account_product_selection_schedule(history):
+    for item in reversed(history):
+        if item.get("role") != "assistant":
+            continue
+
+        content = item.get("content", "")
+        match = re.search(
+            r"EBL\s+(Retail|SME|Islamic)\s+.+?\s+accounts include:",
+            content,
+            flags=re.IGNORECASE,
+        )
+
+        if match:
+            return match.group(1).title()
+
+        if last_reply_is_account_product_selection_prompt([item]):
+            break
+
+    return ""
+
+
+def detect_account_product_from_selection_context(history, message):
+    schedule = detect_account_product_selection_schedule(history)
+
+    if not schedule:
+        return None
+
+    for product in ACCOUNT_PRODUCT_RULES:
+        if not account_product_matches_schedule(product, schedule):
+            continue
+
+        if account_product_candidate_matches_message(product, message):
+            return product
 
     return None
 
@@ -4929,6 +5042,31 @@ def build_account_names_for_category_reply(schedule, category):
         f"{account_lines}\n\n"
         "Please tell me the specific account name if you want details or opening information."
     )
+
+
+def build_account_segment_selection_reply(segment, user_message=""):
+    if segment == "islamic":
+        return build_account_category_reply("islamic_deposit")
+
+    schedule = ACCOUNT_SEGMENT_SCHEDULES.get(segment, "")
+
+    if not schedule:
+        return build_account_segment_reply(segment)
+
+    selected_category = find_account_category(schedule, user_message)
+
+    if selected_category:
+        return build_account_names_for_category_reply(
+            schedule,
+            selected_category,
+        )
+
+    category_reply = build_account_schedule_category_reply(segment)
+
+    if category_reply:
+        return category_reply
+
+    return build_account_segment_reply(segment)
 
 
 def build_account_category_reply(category):
@@ -5541,6 +5679,37 @@ def build_specific_account_documents_reply(product, user_message):
 
 
 def build_account_router_reply(user_message, intent, history, search_query=""):
+    if is_account_menu_reset_request(user_message):
+        return ACCOUNT_CATEGORY_QUESTION
+
+    if last_assistant_asked_for_account_category(history):
+        if not is_account_segment_selection(user_message):
+            product = detect_specific_account_product(user_message)
+
+            if product:
+                if (
+                    is_document_question(user_message)
+                    or is_document_question(search_query)
+                ):
+                    return build_specific_account_documents_reply(product, user_message)
+
+                return build_specific_account_reply(product)
+
+        segment = detect_account_segment(user_message)
+        category = detect_account_category(user_message)
+
+        if segment:
+            segment_reply = build_account_segment_selection_reply(
+                segment,
+                user_message,
+            )
+
+            if segment_reply:
+                return segment_reply
+
+        if category:
+            return build_account_category_reply(category)
+
     schedule_context = detect_account_schedule_from_category_prompt(history)
 
     if schedule_context:
@@ -5551,6 +5720,14 @@ def build_account_router_reply(user_message, intent, history, search_query=""):
                 schedule_context,
                 selected_category,
             )
+
+    product = detect_account_product_from_selection_context(history, user_message)
+
+    if product:
+        if is_document_question(user_message) or is_document_question(search_query):
+            return build_specific_account_documents_reply(product, user_message)
+
+        return build_specific_account_reply(product)
 
     product = detect_specific_account_product(user_message)
 
@@ -5608,25 +5785,13 @@ def build_account_router_reply(user_message, intent, history, search_query=""):
         or has_account_context
     ):
         if segment:
-            schedule = ACCOUNT_SEGMENT_SCHEDULES.get(segment, "")
-            selected_category = (
-                find_account_category(schedule, user_message)
-                if schedule
-                else ""
+            segment_reply = build_account_segment_selection_reply(
+                segment,
+                user_message,
             )
 
-            if selected_category:
-                return build_account_names_for_category_reply(
-                    schedule,
-                    selected_category,
-                )
-
-            category_reply = build_account_schedule_category_reply(segment)
-
-            if category_reply:
-                return category_reply
-
-            return build_account_segment_reply(segment)
+            if segment_reply:
+                return segment_reply
 
         if category:
             return build_account_category_reply(category)
@@ -5636,16 +5801,53 @@ def build_account_router_reply(user_message, intent, history, search_query=""):
 
     if is_account_category_follow_up(user_message, history):
         if segment:
-            category_reply = build_account_schedule_category_reply(segment)
-
-            if category_reply:
-                return category_reply
-
-            return build_account_segment_reply(segment)
+            return build_account_segment_selection_reply(segment, user_message)
 
         return build_account_category_reply(category)
 
     return ""
+
+
+def is_account_flow_prompt_reply(reply):
+    if not reply:
+        return False
+
+    if assistant_prompt_domain(reply) == "account":
+        return True
+
+    return last_reply_is_account_product_selection_prompt([
+        {
+            "role": "assistant",
+            "content": reply,
+        }
+    ])
+
+
+def should_prioritize_account_flow(session_id, user_message):
+    last_reply = last_assistant_reply(session_id)
+    account_flow_prompt_active = is_account_flow_prompt_reply(last_reply)
+    literal_words = set(normalize_literal_menu_text(user_message).split())
+    explicitly_asked_rate = (
+        "interest rate" in normalize_literal_menu_text(user_message)
+        or bool(literal_words & {"rate", "rates"})
+    )
+    known_account_product = detect_specific_account_product(user_message)
+
+    if (
+        known_account_product
+        and not explicitly_asked_rate
+        and not is_fee_or_charge_question(user_message)
+    ):
+        return True
+
+    if (
+        is_interest_rate_phrase(user_message)
+        or has_rate_word(user_message)
+        or is_fee_or_charge_question(user_message)
+    ):
+        return False
+
+    return account_flow_prompt_active
 
 
 def detect_card_category(message):
@@ -7319,47 +7521,75 @@ def chat(request: ChatRequest):
             status="answered",
         )
 
-    interest_rate_flow_reply = build_interest_rate_flow_reply(
+    account_flow_active = should_prioritize_account_flow(
         session_id,
         user_message,
     )
 
-    if interest_rate_flow_reply:
-        return save_and_build_response(
-            session_id=session_id,
-            user_message=user_message,
-            reply=interest_rate_flow_reply,
-            source="interest-rate-router",
-            status="answered",
+    if account_flow_active:
+        account_flow_history = get_chat_history(session_id, limit=6)
+        account_flow_reply = build_account_router_reply(
+            user_message,
+            "account_information",
+            account_flow_history,
+            user_message,
         )
 
-    structured_deposit_rate_reply = answer_deposit_rate_question_from_db(
-        user_message
-    )
+        if account_flow_reply:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=account_flow_reply,
+                source="account-router",
+                status="answered",
+            )
 
-    if structured_deposit_rate_reply:
-        return save_and_build_response(
-            session_id=session_id,
-            user_message=user_message,
-            reply=structured_deposit_rate_reply,
-            source="deposit-rate-database",
-            status="answered",
+    if not account_flow_active:
+        interest_rate_flow_reply = build_interest_rate_flow_reply(
+            session_id,
+            user_message,
         )
 
-    deposit_product_history = get_chat_history(session_id, limit=4)
-    deposit_rate_product_name_reply = build_deposit_rate_product_name_reply(
-        user_message,
-        deposit_product_history,
-    )
+        if interest_rate_flow_reply:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=interest_rate_flow_reply,
+                source="interest-rate-router",
+                status="answered",
+            )
 
-    if deposit_rate_product_name_reply:
-        return save_and_build_response(
-            session_id=session_id,
-            user_message=user_message,
-            reply=deposit_rate_product_name_reply,
-            source="deposit-rate-database",
-            status="answered",
+    structured_deposit_rate_reply = ""
+
+    if not account_flow_active:
+        structured_deposit_rate_reply = answer_deposit_rate_question_from_db(
+            user_message
         )
+
+        if structured_deposit_rate_reply:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=structured_deposit_rate_reply,
+                source="deposit-rate-database",
+                status="answered",
+            )
+
+    if not account_flow_active:
+        deposit_product_history = get_chat_history(session_id, limit=4)
+        deposit_rate_product_name_reply = build_deposit_rate_product_name_reply(
+            user_message,
+            deposit_product_history,
+        )
+
+        if deposit_rate_product_name_reply:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=deposit_rate_product_name_reply,
+                source="deposit-rate-database",
+                status="answered",
+            )
 
     if is_specific_card_product_information_request(user_message):
         specific_card_product = detect_specific_card_product(user_message)
