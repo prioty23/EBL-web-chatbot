@@ -1311,10 +1311,6 @@ export default function Chatbot() {
         key={action}
         type="button"
         onClick={() => {
-          if (action.toLowerCase() === "locate us") {
-            return;
-          }
-
           void sendMessage(action);
         }}
         disabled={isLoading}

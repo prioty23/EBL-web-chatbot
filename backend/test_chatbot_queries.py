@@ -296,6 +296,43 @@ TEST_CASES = [
         must_not_contain=["info@ebl-bd.com"],
     ),
     QueryCase(
+        name="Locate Us asks for Dhaka area without area buttons",
+        messages=["Locate Us"],
+        sources={"branch-locator-agent"},
+        must_contain=["Please tell me your Dhaka area"],
+        quick_actions_not_contain=["Gulshan", "Mirpur", "Dhanmondi"],
+    ),
+    QueryCase(
+        name="Direct nearest branch query shows Gulshan branches",
+        messages=["nearest branch in Gulshan"],
+        sources={"branch-locator-agent"},
+        must_contain=[
+            "EBL Dhaka branches matching Gulshan",
+            "Gulshan Branch",
+            "Routing No.",
+            "info@ebl-bd.com",
+            "https://www.ebl.com.bd/branches",
+        ],
+        must_not_contain=["I could not find", "Source:"],
+    ),
+    QueryCase(
+        name="Direct nearest branch query shows Mirpur branches",
+        messages=["nearest branch in Mirpur"],
+        sources={"branch-locator-agent"},
+        must_contain=[
+            "EBL Dhaka branches matching Mirpur",
+            "Mirpur Branch",
+            "Routing No.",
+        ],
+        must_not_contain=["Please tell me your Dhaka area"],
+    ),
+    QueryCase(
+        name="Unknown Dhaka area gives branch fallback",
+        messages=["nearest branch in Tongi"],
+        sources={"branch-locator-agent"},
+        must_contain=["I could not find a matching EBL branch in Dhaka"],
+    ),
+    QueryCase(
         name="Contact us returns general contact info",
         messages=["Contact Us"],
         sources={"contact-agent"},
@@ -314,6 +351,7 @@ def prepare_environment():
     main.ensure_charge_database_ready()
     main.ensure_deposit_rate_database_ready()
     main.ensure_lending_rate_database_ready()
+    main.ensure_branch_database_ready(auto_scrape=True)
     main.import_account_types(clear_existing=True)
     main.ensure_account_types_ready()
     main.import_loan_types(clear_existing=True)

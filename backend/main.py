@@ -75,9 +75,15 @@ from query_understanding_ai import understand_user_query_with_groq
 from agent_actions import (
     get_contact_reply,
     get_online_apply_reply,
-    get_branch_locator_reply,
     get_urgent_card_reply,
     get_complaint_start_reply,
+)
+
+from branch_database import (
+    BRANCH_AREA_PROMPT,
+    build_dhaka_branch_reply,
+    ensure_branch_database_ready,
+    extract_branch_query_terms,
 )
 
 from complaint_manager import (
@@ -2864,6 +2870,9 @@ def assistant_prompt_domain(reply):
     if reply == INTEREST_RATE_TYPE_REPLY:
         return "interest_rate"
 
+    if reply == BRANCH_AREA_PROMPT:
+        return "branch_locator"
+
     if (
         reply.startswith("Please specify the deposit product")
         or "deposit product rate do you want?" in reply
@@ -3293,6 +3302,36 @@ def build_bare_banking_segment_reply(session_id, user_message):
         f"Please specify what you want to know about {segment_label}: "
         "account, loan, card or schedule of charges."
     )
+
+
+def is_locate_us_request(message):
+    normalized_message = normalize_literal_menu_text(message)
+
+    return normalized_message in {
+        "locate us",
+        "branch locator",
+        "find branch",
+        "find a branch",
+        "find branches",
+        "nearest branch",
+    }
+
+
+def branch_query_has_area(message):
+    return bool(extract_branch_query_terms(message))
+
+
+def last_reply_was_branch_area_prompt(session_id):
+    return latest_assistant_prompt_domain(session_id) == "branch_locator"
+
+
+def build_branch_locator_response(user_message, search_query=""):
+    query_text = f"{user_message} {search_query}".strip()
+
+    if not branch_query_has_area(query_text):
+        return BRANCH_AREA_PROMPT
+
+    return build_dhaka_branch_reply(query_text)
 
 
 def normalized_word_set(message):
@@ -7261,6 +7300,7 @@ def startup_event():
     ensure_charge_database_ready()
     ensure_deposit_rate_database_ready()
     ensure_lending_rate_database_ready()
+    ensure_branch_database_ready()
     import_account_types(clear_existing=True)
     ensure_account_types_ready()
     import_loan_types(clear_existing=True)
@@ -7366,6 +7406,24 @@ def chat(request: ChatRequest):
             user_message=user_message,
             reply=build_complaint_cell_reply(),
             source="complaint-cell-agent",
+            status="answered",
+        )
+
+    if is_locate_us_request(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=BRANCH_AREA_PROMPT,
+            source="branch-locator-agent",
+            status="answered",
+        )
+
+    if last_reply_was_branch_area_prompt(session_id):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_branch_locator_response(user_message),
+            source="branch-locator-agent",
             status="answered",
         )
 
@@ -7874,7 +7932,7 @@ def chat(request: ChatRequest):
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
-            reply=get_branch_locator_reply(),
+            reply=build_branch_locator_response(user_message, search_query),
             source="branch-locator-agent",
             status="answered",
         )
