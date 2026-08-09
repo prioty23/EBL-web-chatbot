@@ -1,11 +1,16 @@
-"""Scrape EBL Dhaka branch information from the official website."""
+"""Scrape EBL branch information from the official website."""
 
 from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
 
-from branch_database import BRANCH_SOURCE_URL, save_branches
+from branch_database import (
+    BRANCH_SOURCE_URL,
+    BRANCH_SUPPORTED_DISTRICTS,
+    canonical_branch_district,
+    save_branches,
+)
 
 
 HEADERS = {
@@ -66,7 +71,18 @@ def extract_table_rows(table):
     return rows
 
 
-def extract_branch_from_row(row, updated_at):
+def normalize_filter_districts(districts):
+    if not districts:
+        return set(BRANCH_SUPPORTED_DISTRICTS)
+
+    return {
+        canonical_branch_district(district)
+        for district in districts
+        if district
+    }
+
+
+def extract_branch_from_row(row, updated_at, target_districts=None):
     columns = [
         clean_text(column.get_text(" ", strip=True))
         for column in row.select("td")
@@ -75,13 +91,13 @@ def extract_branch_from_row(row, updated_at):
     if len(columns) < 6:
         return None
 
-    district = columns[1]
+    district = canonical_branch_district(columns[1])
     branch_name = columns[2]
     address = columns[3]
     routing_no = columns[4]
     phone_email = columns[5]
 
-    if district.lower() != "dhaka":
+    if target_districts and district not in target_districts:
         return None
 
     if not branch_name or branch_name == "-":
@@ -98,13 +114,14 @@ def extract_branch_from_row(row, updated_at):
     }
 
 
-def scrape_dhaka_branches(url=BRANCH_SOURCE_URL):
+def scrape_branches(url=BRANCH_SOURCE_URL, districts=None):
     response = requests.get(url, headers=HEADERS, timeout=20)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "html.parser")
     decode_protected_emails(soup)
     updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    target_districts = normalize_filter_districts(districts)
     branches = []
 
     for table in soup.find_all("table"):
@@ -112,7 +129,7 @@ def scrape_dhaka_branches(url=BRANCH_SOURCE_URL):
             continue
 
         for row in extract_table_rows(table):
-            branch = extract_branch_from_row(row, updated_at)
+            branch = extract_branch_from_row(row, updated_at, target_districts)
 
             if branch:
                 branches.append(branch)
@@ -120,12 +137,30 @@ def scrape_dhaka_branches(url=BRANCH_SOURCE_URL):
     return branches
 
 
-def refresh_dhaka_branches(url=BRANCH_SOURCE_URL):
-    branches = scrape_dhaka_branches(url)
-    save_branches(branches, district="Dhaka", source_url=url)
+def refresh_supported_branches(url=BRANCH_SOURCE_URL, districts=None):
+    target_districts = normalize_filter_districts(districts)
+    branches = scrape_branches(url, target_districts)
+
+    for district in target_districts:
+        district_branches = [
+            branch
+            for branch in branches
+            if canonical_branch_district(branch.get("district")) == district
+        ]
+        save_branches(district_branches, district=district, source_url=url)
+
     return branches
 
 
+def scrape_dhaka_branches(url=BRANCH_SOURCE_URL):
+    return scrape_branches(url, districts=("Dhaka",))
+
+
+def refresh_dhaka_branches(url=BRANCH_SOURCE_URL):
+    return refresh_supported_branches(url, districts=("Dhaka",))
+
+
 if __name__ == "__main__":
-    scraped_branches = refresh_dhaka_branches()
-    print(f"Saved {len(scraped_branches)} Dhaka branches from {BRANCH_SOURCE_URL}")
+    scraped_branches = refresh_supported_branches()
+    district_labels = ", ".join(BRANCH_SUPPORTED_DISTRICTS)
+    print(f"Saved {len(scraped_branches)} {district_labels} branches from {BRANCH_SOURCE_URL}")

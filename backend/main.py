@@ -81,9 +81,15 @@ from agent_actions import (
 
 from branch_database import (
     BRANCH_AREA_PROMPT,
-    build_dhaka_branch_reply,
+    BRANCH_DISTRICT_MENU_REPLY,
+    BRANCH_DISTRICT_QUICK_ACTIONS,
+    build_branch_locator_reply,
+    branch_area_prompt,
+    branch_district_from_query,
+    branch_districts_from_query,
     ensure_branch_database_ready,
     extract_branch_query_terms,
+    is_branch_area_prompt,
 )
 
 from complaint_manager import (
@@ -2870,7 +2876,10 @@ def assistant_prompt_domain(reply):
     if reply == INTEREST_RATE_TYPE_REPLY:
         return "interest_rate"
 
-    if reply == BRANCH_AREA_PROMPT:
+    if reply == BRANCH_DISTRICT_MENU_REPLY:
+        return "branch_district"
+
+    if is_branch_area_prompt(reply):
         return "branch_locator"
 
     if (
@@ -3318,11 +3327,19 @@ def is_locate_us_request(message):
 
 
 def branch_query_has_area(message):
-    return bool(extract_branch_query_terms(message))
+    return bool(extract_branch_query_terms(message) or branch_districts_from_query(message))
 
 
 def last_reply_was_branch_area_prompt(session_id):
     return latest_assistant_prompt_domain(session_id) == "branch_locator"
+
+
+def last_reply_was_branch_district_prompt(session_id):
+    return latest_assistant_prompt_domain(session_id) == "branch_district"
+
+
+def last_selected_branch_district(session_id):
+    return branch_district_from_query(last_user_message(session_id, limit=4))
 
 
 def build_branch_locator_response(user_message, search_query=""):
@@ -3331,7 +3348,7 @@ def build_branch_locator_response(user_message, search_query=""):
     if not branch_query_has_area(query_text):
         return BRANCH_AREA_PROMPT
 
-    return build_dhaka_branch_reply(query_text)
+    return build_branch_locator_reply(query_text)
 
 
 def normalized_word_set(message):
@@ -6918,6 +6935,9 @@ def build_quick_actions(reply, source):
     if reply == INTEREST_RATE_TYPE_REPLY:
         return INTEREST_RATE_QUICK_ACTIONS
 
+    if reply == BRANCH_DISTRICT_MENU_REPLY:
+        return BRANCH_DISTRICT_QUICK_ACTIONS
+
     if reply == LOAN_CATEGORY_QUESTION:
         return LOAN_SEGMENT_QUICK_ACTIONS
 
@@ -7085,6 +7105,9 @@ def display_reply_for_quick_actions(reply, quick_actions):
 
     if reply == INTEREST_RATE_TYPE_REPLY:
         return "Which interest rate do you want to know?"
+
+    if reply == BRANCH_DISTRICT_MENU_REPLY:
+        return "Which district branch do you want to locate?"
 
     if reply == LOAN_CATEGORY_QUESTION:
         return "Which loan type do you want to know?"
@@ -7413,16 +7436,47 @@ def chat(request: ChatRequest):
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
-            reply=BRANCH_AREA_PROMPT,
+            reply=BRANCH_DISTRICT_MENU_REPLY,
+            source="branch-locator-agent",
+            status="answered",
+        )
+
+    if last_reply_was_branch_district_prompt(session_id):
+        selected_district = branch_district_from_query(user_message)
+
+        if selected_district:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=branch_area_prompt(selected_district),
+                source="branch-locator-agent",
+                status="answered",
+            )
+
+        if branch_query_has_area(user_message):
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=build_branch_locator_response(user_message),
+                source="branch-locator-agent",
+                status="answered",
+            )
+
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=BRANCH_DISTRICT_MENU_REPLY,
             source="branch-locator-agent",
             status="answered",
         )
 
     if last_reply_was_branch_area_prompt(session_id):
+        selected_district = last_selected_branch_district(session_id)
+
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
-            reply=build_branch_locator_response(user_message),
+            reply=build_branch_locator_response(user_message, selected_district),
             source="branch-locator-agent",
             status="answered",
         )

@@ -65,6 +65,15 @@ const MAIN_MENU_QUICK_ACTIONS = [
   "Contact Us",
   "Locate Us",
 ];
+const DISTRICT_QUICK_ACTIONS = [
+  "Chattogram",
+  "Dhaka",
+  "Gazipur",
+  "Khulna",
+  "Narayanganj",
+  "Noakhali",
+  "Sylhet",
+];
 const SCOPED_BACK_MESSAGE = "Back";
 const COMPLAINT_CELL_DEFAULT_EMAIL = "ccs.cmc@ebl-bd.com";
 const COMPLAINT_CELL_DEFAULT_FORM = "https://dgzip.ebl-bd.com/query/";
@@ -133,6 +142,29 @@ function MinimizeIcon({ className = "h-5 w-5" }: { className?: string }) {
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function DistrictPinIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+    >
+      <path
+        d="M12 20s5.25-4.35 5.25-9.15a5.25 5.25 0 0 0-10.5 0C6.75 15.65 12 20 12 20Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 12.5a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
       />
     </svg>
   );
@@ -360,6 +392,70 @@ function QuickActionIcon({
   return null;
 }
 
+function ExternalLinkIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+    >
+      <path
+        d="M14 5h5v5M19 5l-8 8M19 14v3.5A1.5 1.5 0 0 1 17.5 19h-11A1.5 1.5 0 0 1 5 17.5v-11A1.5 1.5 0 0 1 6.5 5H10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function getReadableLinkLabel(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const pathname = parsedUrl.pathname.toLowerCase();
+
+    if (hostname.includes("dgzip.ebl-bd.com") || pathname.includes("query")) {
+      return "Open complaint form";
+    }
+
+    if (pathname.includes("branches")) {
+      return "View branch page";
+    }
+
+    if (pathname.includes("interest")) {
+      return "View interest rates";
+    }
+
+    if (pathname.includes("schedule")) {
+      return "View schedule";
+    }
+
+    if (hostname.includes("ebl.com.bd")) {
+      return "Open EBL page";
+    }
+  } catch {
+    return "Open link";
+  }
+
+  return "Open link";
+}
+
+function splitTrailingPunctuation(value: string) {
+  const match = value.match(/^(.*?)([),.;:!?]+)$/);
+
+  if (!match) {
+    return { link: value, trailingText: "" };
+  }
+
+  return {
+    link: match[1],
+    trailingText: match[2],
+  };
+}
+
 function formatMessage(text: string) {
   const pattern =
     /(https?:\/\/[^\s]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|\+?\d[\d\s-]{7,}\d|16230)/g;
@@ -368,16 +464,22 @@ function formatMessage(text: string) {
     const cleanPart = part.trim();
 
     if (cleanPart.startsWith("http://") || cleanPart.startsWith("https://")) {
+      const { link, trailingText } = splitTrailingPunctuation(cleanPart);
+
       return (
-        <a
-          key={index}
-          href={cleanPart}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="break-all font-semibold underline underline-offset-2"
-        >
-          {cleanPart}
-        </a>
+        <span key={index} className="inline-flex max-w-full items-center gap-1">
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={link}
+            className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#006A4E]/20 bg-white px-2.5 py-1 text-xs font-semibold leading-none text-[#005B43] no-underline shadow-sm transition hover:border-[#006A4E]/35 hover:bg-[#F5FBF8]"
+          >
+            <span className="min-w-0 truncate">{getReadableLinkLabel(link)}</span>
+            <ExternalLinkIcon className="h-3.5 w-3.5 shrink-0" />
+          </a>
+          {trailingText}
+        </span>
       );
     }
 
@@ -386,7 +488,7 @@ function formatMessage(text: string) {
         <a
           key={index}
           href={`mailto:${cleanPart}`}
-          className="break-all font-semibold underline underline-offset-2"
+          className="break-words font-semibold underline underline-offset-2 [overflow-wrap:anywhere]"
         >
           {cleanPart}
         </a>
@@ -400,7 +502,7 @@ function formatMessage(text: string) {
         <a
           key={index}
           href={`tel:${phoneNumber}`}
-          className="font-semibold underline underline-offset-2"
+          className="break-words font-semibold underline underline-offset-2 [overflow-wrap:anywhere]"
         >
           {cleanPart}
         </a>
@@ -445,9 +547,9 @@ function renderCorporateChargeCellContent(cellContent: string) {
   }
 
   return (
-    <span className="block space-y-1">
+    <span className="block min-w-0 space-y-1 break-words [overflow-wrap:anywhere]">
       {parts.map((part, index) => (
-        <span key={`${part}-${index}`} className="block">
+        <span key={`${part}-${index}`} className="block min-w-0">
           {formatMessage(part)}
         </span>
       ))}
@@ -482,115 +584,110 @@ function messageHasCorporateChargeTable(text: string) {
   return false;
 }
 
-function renderTableCells(
-  cells: string[],
-  isHeader: boolean,
-  rowKey: string,
-  isCorporateCharge: boolean,
-) {
-  const renderedCells: ReactNode[] = [];
+function normalizeTableColumns(headers: string[], rows: string[][]) {
+  const columnCount = Math.max(
+    headers.length,
+    ...rows.map((row) => row.length),
+  );
 
-  for (let index = 0; index < cells.length; index += 1) {
-    if (cells[index] === "" && index > 0) {
-      continue;
-    }
-
-    let colSpan = 1;
-
-    while (index + colSpan < cells.length && cells[index + colSpan] === "") {
-      colSpan += 1;
-    }
-
-    const sharedClassName = isCorporateCharge
-      ? `border border-emerald-100 px-3 py-2.5 text-left whitespace-normal break-normal [overflow-wrap:normal] [word-break:normal] ${
-          isHeader || index === 0 ? "align-middle" : "align-top"
-        }`
-      : "border border-gray-200 px-3 py-2 align-top text-left whitespace-nowrap";
-    const cellKey = `${rowKey}-${index}`;
-    const cellContent = cells[index] || "\u00A0";
-
-    if (isHeader) {
-      renderedCells.push(
-        <th
-          key={cellKey}
-          colSpan={colSpan > 1 ? colSpan : undefined}
-          className={
-            isCorporateCharge
-              ? `${sharedClassName} bg-emerald-50 font-semibold text-[#064E3B]`
-              : `${sharedClassName} bg-gray-50 font-semibold text-gray-900`
-          }
-        >
-          {formatMessage(cellContent)}
-        </th>,
-      );
-    } else {
-      renderedCells.push(
-        <td
-          key={cellKey}
-          colSpan={colSpan > 1 ? colSpan : undefined}
-          className={
-            isCorporateCharge
-              ? `${sharedClassName} bg-white text-gray-700 ${
-                  index === 0 ? "font-medium" : ""
-                }`
-              : `${sharedClassName} text-gray-700`
-          }
-        >
-          {isCorporateCharge
-            ? renderCorporateChargeCellContent(cellContent)
-            : formatMessage(cellContent)}
-        </td>,
-      );
-    }
-  }
-
-  return renderedCells;
+  return {
+    headers: Array.from(
+      { length: columnCount },
+      (_, index) => headers[index]?.trim() || `Value ${index}`,
+    ),
+    rows: rows.map((row) =>
+      Array.from({ length: columnCount }, (_, index) => row[index]?.trim() || ""),
+    ),
+  };
 }
 
-function renderMarkdownTable(headers: string[], rows: string[][], key: string) {
-  const isCorporateCharge = isCorporateChargeTable(headers);
+function renderTableCellValue(value: string, isCorporateCharge: boolean) {
+  if (!value) {
+    return <span className="text-gray-400">N/A</span>;
+  }
+
+  return isCorporateCharge
+    ? renderCorporateChargeCellContent(value)
+    : formatMessage(value);
+}
+
+function renderTableRowCard(
+  headers: string[],
+  row: string[],
+  key: string,
+  isCorporateCharge: boolean,
+) {
+  const title = row[0] || headers[0] || "Details";
+  const details = headers.slice(1).map((header, index) => ({
+    label: header,
+    value: row[index + 1] || "",
+  }));
 
   return (
     <div
       key={key}
       className={
         isCorporateCharge
-          ? "my-2 max-w-full overflow-x-auto rounded-lg border border-emerald-100 bg-white text-gray-800 shadow-sm"
-          : "my-2 max-w-full overflow-x-auto rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm"
+          ? "min-w-0 overflow-hidden rounded-xl border border-emerald-100 bg-white text-gray-800 shadow-sm"
+          : "min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-800 shadow-sm"
       }
     >
-      <table
+      <div
         className={
           isCorporateCharge
-            ? "min-w-[680px] table-fixed border-collapse text-xs leading-5"
-            : "min-w-full border-collapse text-xs leading-5"
+            ? "border-b border-emerald-100 bg-emerald-50 px-3 py-2.5"
+            : "border-b border-gray-200 bg-gray-50 px-3 py-2.5"
         }
       >
-        {isCorporateCharge ? (
-          <colgroup>
-            <col style={{ width: "30%" }} />
-            <col style={{ width: "35%" }} />
-            <col style={{ width: "35%" }} />
-          </colgroup>
-        ) : null}
-        <thead>
-          <tr>
-            {renderTableCells(headers, true, `${key}-header`, isCorporateCharge)}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={`${key}-row-${rowIndex}`}>
-              {renderTableCells(
-                row,
-                false,
-                `${key}-row-${rowIndex}`,
-                isCorporateCharge,
-              )}
-            </tr>
+        <p className="min-w-0 break-words text-xs font-semibold text-gray-500 [overflow-wrap:anywhere]">
+          {formatMessage(headers[0] || "Details")}
+        </p>
+        <p
+          className={
+            isCorporateCharge
+              ? "mt-0.5 min-w-0 break-words text-sm font-semibold leading-5 text-[#064E3B] [overflow-wrap:anywhere]"
+              : "mt-0.5 min-w-0 break-words text-sm font-semibold leading-5 text-gray-900 [overflow-wrap:anywhere]"
+          }
+        >
+          {formatMessage(title)}
+        </p>
+      </div>
+
+      {details.length > 0 ? (
+        <dl className="divide-y divide-gray-100">
+          {details.map((detail, index) => (
+            <div
+              key={`${key}-detail-${index}`}
+              className="grid min-w-0 gap-1 px-3 py-2.5"
+            >
+              <dt className="min-w-0 break-words text-xs font-semibold leading-5 text-gray-500 [overflow-wrap:anywhere]">
+                {formatMessage(detail.label)}
+              </dt>
+              <dd className="min-w-0 break-words text-sm leading-5 text-gray-800 [overflow-wrap:anywhere]">
+                {renderTableCellValue(detail.value, isCorporateCharge)}
+              </dd>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
+function renderMarkdownTable(headers: string[], rows: string[][], key: string) {
+  const isCorporateCharge = isCorporateChargeTable(headers);
+  const normalizedTable = normalizeTableColumns(headers, rows);
+
+  return (
+    <div key={key} className="my-2 max-w-full space-y-2 break-words [overflow-wrap:anywhere]">
+      {normalizedTable.rows.map((row, rowIndex) =>
+        renderTableRowCard(
+          normalizedTable.headers,
+          row,
+          `${key}-row-${rowIndex}`,
+          isCorporateCharge,
+        ),
+      )}
     </div>
   );
 }
@@ -638,7 +735,10 @@ function renderMessageContent(text: string) {
 
     if (textBlock.trim()) {
       nodes.push(
-        <span key={`text-${nodes.length}`} className="block whitespace-pre-line">
+        <span
+          key={`text-${nodes.length}`}
+          className="block min-w-0 whitespace-pre-line break-words [overflow-wrap:anywhere]"
+        >
           {formatMessage(textBlock)}
         </span>,
       );
@@ -781,24 +881,24 @@ function parseComplaintCellContent(text: string): ComplaintCellDetails {
 
 function renderComplaintContact(contact: ComplaintCellContact, index: number) {
   return (
-    <div key={`${contact.name}-${index}`} className="px-3 py-3">
-      <p className="text-sm font-semibold leading-5 text-[#005B43]">
+    <div key={`${contact.name}-${index}`} className="min-w-0 px-3 py-3">
+      <p className="min-w-0 break-words text-sm font-semibold leading-5 text-[#005B43] [overflow-wrap:anywhere]">
         {contact.name}
       </p>
-      <dl className="mt-2 space-y-1.5 text-xs leading-5">
-        <div>
+      <dl className="mt-2 min-w-0 space-y-1.5 text-xs leading-5">
+        <div className="min-w-0 break-words [overflow-wrap:anywhere]">
           <dt className="inline font-semibold text-gray-500">Designation: </dt>
           <dd className="inline text-gray-800">
             {formatMessage(contact.designation)}
           </dd>
         </div>
-        <div>
+        <div className="min-w-0 break-words [overflow-wrap:anywhere]">
           <dt className="inline font-semibold text-gray-500">Email: </dt>
-          <dd className="inline break-all text-gray-800">
+          <dd className="inline break-words text-gray-800 [overflow-wrap:anywhere]">
             {formatMessage(contact.email)}
           </dd>
         </div>
-        <div>
+        <div className="min-w-0 break-words [overflow-wrap:anywhere]">
           <dt className="inline font-semibold text-gray-500">Phone No.: </dt>
           <dd className="inline text-gray-800">{formatMessage(contact.phone)}</dd>
         </div>
@@ -817,14 +917,14 @@ function renderComplaintCellContent(text: string) {
   const fallbackForm = details.onlineForm || COMPLAINT_CELL_DEFAULT_FORM;
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3 break-words [overflow-wrap:anywhere]">
       {hasContactSections ? (
         details.sections.map((section) => (
           <div
             key={section.title}
-            className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+            className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
           >
-            <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 text-center text-xs font-semibold leading-5 text-gray-800">
+            <div className="min-w-0 break-words border-b border-gray-200 bg-gray-50 px-3 py-2 text-center text-xs font-semibold leading-5 text-gray-800 [overflow-wrap:anywhere]">
               {section.title}
             </div>
             <div className="divide-y divide-gray-100">
@@ -833,7 +933,7 @@ function renderComplaintCellContent(text: string) {
           </div>
         ))
       ) : (
-        <div className="space-y-1.5 text-sm leading-6 text-white">
+        <div className="min-w-0 space-y-1.5 break-words text-sm leading-6 text-white [overflow-wrap:anywhere]">
           <p>
             <span className="font-semibold">Email Address: </span>
             {formatMessage(fallbackEmail)}
@@ -846,8 +946,8 @@ function renderComplaintCellContent(text: string) {
           </p>
         </div>
       )}
-      <div className="rounded-xl border border-[#F0C84B] bg-[#FFF8D8] px-3 py-2.5 shadow-sm">
-        <p className="text-xs font-semibold leading-5 text-[#4B3A00]">
+      <div className="min-w-0 rounded-xl border border-[#F0C84B] bg-[#FFF8D8] px-3 py-2.5 shadow-sm">
+        <p className="min-w-0 break-words text-xs font-semibold leading-5 text-[#4B3A00] [overflow-wrap:anywhere]">
           {formatMessage(footerText)}
         </p>
       </div>
@@ -952,12 +1052,26 @@ function isMainMenuQuickAction(action: string) {
   );
 }
 
+function isDistrictQuickAction(action: string) {
+  return DISTRICT_QUICK_ACTIONS.some(
+    (district) => district.toLowerCase() === action.toLowerCase(),
+  );
+}
+
 function isMainMenuQuickActionList(actions: string[] | undefined) {
   if (!actions?.length) {
     return false;
   }
 
   return actions.every(isMainMenuQuickAction);
+}
+
+function isDistrictQuickActionList(actions: string[] | undefined) {
+  if (!actions?.length) {
+    return false;
+  }
+
+  return actions.every(isDistrictQuickAction);
 }
 
 function hasMenuSource(message: Message, sources: Set<string>) {
@@ -1305,6 +1419,7 @@ export default function Chatbot() {
 
   const renderQuickActionButton = (action: string) => {
     const isMainAction = isMainMenuQuickAction(action);
+    const isDistrictAction = isDistrictQuickAction(action);
 
     return (
       <button
@@ -1316,8 +1431,10 @@ export default function Chatbot() {
         disabled={isLoading}
         className={
           isMainAction
-            ? "flex min-h-11 w-full items-center gap-2 rounded-full border border-[#006A4E]/70 bg-white px-3 py-2 text-left text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
-            : "rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+            ? "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-full border border-[#006A4E]/70 bg-white px-3 py-2 text-left text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
+            : isDistrictAction
+              ? "group flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-xl border border-[#006A4E]/20 bg-[#F5FBF8] px-3 py-2.5 text-left text-[13px] font-semibold leading-tight text-[#004D39] shadow-sm transition hover:-translate-y-0.5 hover:border-[#006A4E]/55 hover:bg-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+            : "min-w-0 rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
         }
       >
         {isMainAction ? (
@@ -1325,7 +1442,20 @@ export default function Chatbot() {
             <QuickActionIcon action={action} />
           </span>
         ) : null}
-        <span className="min-w-0 flex-1">{action}</span>
+        {isDistrictAction ? (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#006A4E] ring-1 ring-[#006A4E]/15 transition group-hover:bg-[#006A4E] group-hover:text-white">
+            <DistrictPinIcon />
+          </span>
+        ) : null}
+        <span
+          className={
+            isDistrictAction
+              ? "min-w-0 flex-1 whitespace-nowrap"
+              : "min-w-0 flex-1 break-words [overflow-wrap:anywhere]"
+          }
+        >
+          {action}
+        </span>
       </button>
     );
   };
@@ -1363,9 +1493,11 @@ export default function Chatbot() {
               void sendMessage(action);
             }}
             disabled={isLoading}
-            className="block w-full px-4 py-3 text-center text-sm font-medium text-[#006A4E] transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+            className="block w-full min-w-0 px-4 py-3 text-center text-sm font-medium text-[#006A4E] transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {action}
+            <span className="block min-w-0 break-words [overflow-wrap:anywhere]">
+              {action}
+            </span>
           </button>
         ))}
       </div>
@@ -1627,7 +1759,7 @@ export default function Chatbot() {
                             isCorporateTableMessage || isComplaintCellMessage
                               ? "max-w-full rounded-xl px-2.5 py-2.5"
                               : "max-w-[88%] rounded-2xl px-4 py-3"
-                          } text-sm leading-6 shadow-sm ${
+                          } min-w-0 break-words text-sm leading-6 shadow-sm [overflow-wrap:anywhere] ${
                             message.role === "bot"
                               ? "bg-[#006A4E] text-white"
                               : "ml-auto bg-gray-100 text-gray-700"
@@ -1652,6 +1784,10 @@ export default function Chatbot() {
                                   message.quickActions,
                                 )
                                   ? "mt-3 grid max-w-[92%] grid-cols-2 gap-2.5"
+                                  : isDistrictQuickActionList(
+                                      message.quickActions,
+                                    )
+                                    ? "mt-3 grid max-w-[92%] grid-cols-1 gap-2.5"
                                   : "mt-2 flex max-w-[92%] flex-wrap gap-2"
                               }
                             >

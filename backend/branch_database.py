@@ -10,10 +10,48 @@ from language_support import expand_bangla_banglish_text
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "EBL_chatbot.db"
 BRANCH_SOURCE_URL = "https://www.ebl.com.bd/branches"
-BRANCH_AREA_PROMPT = (
-    "Please tell me your Dhaka area, for example Gulshan, Mirpur, "
-    "Dhanmondi, Motijheel, or Uttara."
+BRANCH_SUPPORTED_DISTRICTS = tuple(sorted((
+    "Dhaka",
+    "Chattogram",
+    "Gazipur",
+    "Khulna",
+    "Narayanganj",
+    "Noakhali",
+    "Sylhet",
+)))
+BRANCH_DISTRICT_MENU_REPLY = "Which district branch do you want to locate?"
+BRANCH_DISTRICT_QUICK_ACTIONS = list(BRANCH_SUPPORTED_DISTRICTS)
+BRANCH_SUPPORTED_DISTRICT_LABEL = ", ".join(BRANCH_SUPPORTED_DISTRICTS[:-1]) + (
+    f" or {BRANCH_SUPPORTED_DISTRICTS[-1]}"
 )
+BRANCH_AREA_PROMPT = (
+    "Please tell me your district or area, for example Gulshan in Dhaka, "
+    "Agrabad in Chattogram, Board Bazar in Gazipur, Fulbarigate in Khulna, "
+    "Sonargaon in Narayanganj, Maijdee in Noakhali, or Upashahar in Sylhet."
+)
+BRANCH_DISTRICT_ALIASES = {
+    "dhaka": "Dhaka",
+    "dacca": "Dhaka",
+    "chattogram": "Chattogram",
+    "chattagram": "Chattogram",
+    "chittagong": "Chattogram",
+    "ctg": "Chattogram",
+    "gajipur": "Gazipur",
+    "gazipur": "Gazipur",
+    "gazipore": "Gazipur",
+    "khulna": "Khulna",
+    "kulna": "Khulna",
+    "narayanganj": "Narayanganj",
+    "narayangonj": "Narayanganj",
+    "narayagonj": "Narayanganj",
+    "nganj": "Narayanganj",
+    "noakhali": "Noakhali",
+    "noakali": "Noakhali",
+    "noakhally": "Noakhali",
+    "silet": "Sylhet",
+    "sylhet": "Sylhet",
+    "sylhett": "Sylhet",
+}
 
 
 BRANCH_QUERY_STOP_WORDS = {
@@ -29,27 +67,46 @@ BRANCH_QUERY_STOP_WORDS = {
     "branch",
     "branches",
     "brance",
+    "chattogram",
+    "chattagram",
+    "chittagong",
+    "ctg",
     "dhaka",
     "ebl",
     "eastern",
     "find",
     "for",
+    "gajipur",
+    "gazipur",
+    "gazipore",
     "give",
     "his",
     "i",
     "in",
     "is",
+    "khulna",
     "koi",
     "kothay",
+    "kulna",
     "locate",
     "location",
     "me",
+    "narayanganj",
+    "narayagonj",
+    "narayangonj",
     "near",
     "nearest",
+    "nganj",
+    "noakhali",
+    "noakali",
+    "noakhally",
     "of",
     "plc",
     "please",
     "show",
+    "silet",
+    "sylhet",
+    "sylhett",
     "the",
     "to",
     "us",
@@ -156,6 +213,59 @@ def clean_branch_field(value):
     return " ".join((value or "").replace("\xa0", " ").split())
 
 
+def canonical_branch_district(district):
+    cleaned_district = clean_branch_field(district)
+    normalized_district = normalize_branch_text(cleaned_district)
+
+    return BRANCH_DISTRICT_ALIASES.get(
+        normalized_district,
+        cleaned_district,
+    )
+
+
+def branch_districts_from_query(query):
+    normalized_query = normalize_branch_text(query)
+    query_tokens = set(normalized_query.split())
+    districts = []
+
+    for alias, district in BRANCH_DISTRICT_ALIASES.items():
+        if alias in query_tokens and district not in districts:
+            districts.append(district)
+
+    return districts
+
+
+def branch_district_from_query(query):
+    districts = branch_districts_from_query(query)
+
+    return districts[0] if districts else ""
+
+
+def branch_area_prompt(district):
+    district = canonical_branch_district(district)
+    example_area = {
+        "Dhaka": "Gulshan",
+        "Chattogram": "Agrabad",
+        "Gazipur": "Board Bazar",
+        "Khulna": "Fulbarigate",
+        "Narayanganj": "Sonargaon",
+        "Noakhali": "Maijdee",
+        "Sylhet": "Upashahar",
+    }.get(district, "Gulshan")
+
+    return f"Please tell me your area, for example {example_area} in {district}."
+
+
+def is_branch_area_prompt(reply):
+    if reply == BRANCH_AREA_PROMPT:
+        return True
+
+    return (
+        reply.startswith("Please tell me your area, for example ")
+        and any(district in reply for district in BRANCH_SUPPORTED_DISTRICTS)
+    )
+
+
 def build_area_keywords(branch):
     base_text = " ".join([
         branch.get("branch_name", ""),
@@ -191,6 +301,7 @@ def build_branch_search_text(branch):
 
 def save_branches(branches, district="Dhaka", source_url=BRANCH_SOURCE_URL):
     create_branch_table()
+    district = canonical_branch_district(district)
 
     connection = sqlite3.connect(DATABASE_PATH)
     cursor = connection.cursor()
@@ -202,7 +313,7 @@ def save_branches(branches, district="Dhaka", source_url=BRANCH_SOURCE_URL):
 
     for branch in branches:
         clean_branch = {
-            "district": clean_branch_field(branch.get("district", district)),
+            "district": canonical_branch_district(branch.get("district", district)),
             "branch_name": clean_branch_field(branch.get("branch_name", "")),
             "address": clean_branch_field(branch.get("address", "")),
             "routing_no": clean_branch_field(branch.get("routing_no", "")),
@@ -248,29 +359,47 @@ def save_branches(branches, district="Dhaka", source_url=BRANCH_SOURCE_URL):
     connection.close()
 
 
-def dhaka_branch_count():
+def branch_count(district):
     create_branch_table()
+    district = canonical_branch_district(district)
 
     connection = sqlite3.connect(DATABASE_PATH)
     cursor = connection.cursor()
     cursor.execute(
-        "SELECT COUNT(*) FROM branches WHERE lower(district) = 'dhaka'"
+        "SELECT COUNT(*) FROM branches WHERE lower(district) = lower(?)",
+        (district,),
     )
     count = cursor.fetchone()[0]
     connection.close()
     return count
 
 
+def dhaka_branch_count():
+    return branch_count("Dhaka")
+
+
+def supported_branch_counts():
+    return {
+        district: branch_count(district)
+        for district in BRANCH_SUPPORTED_DISTRICTS
+    }
+
+
 def ensure_branch_database_ready(auto_scrape=False):
     create_branch_table()
+    missing_districts = [
+        district
+        for district in BRANCH_SUPPORTED_DISTRICTS
+        if branch_count(district) == 0
+    ]
 
-    if dhaka_branch_count() > 0 or not auto_scrape:
+    if not missing_districts or not auto_scrape:
         return
 
     try:
-        from branch_scraper import refresh_dhaka_branches
+        from branch_scraper import refresh_supported_branches
 
-        refresh_dhaka_branches()
+        refresh_supported_branches(districts=missing_districts)
     except Exception:
         return
 
@@ -329,8 +458,9 @@ def score_branch(branch, query_terms, normalized_query):
     return score
 
 
-def get_first_dhaka_branches(limit=5):
+def get_first_branches(district, limit=5):
     create_branch_table()
+    district = canonical_branch_district(district)
 
     connection = sqlite3.connect(DATABASE_PATH)
     cursor = connection.cursor()
@@ -338,18 +468,26 @@ def get_first_dhaka_branches(limit=5):
         SELECT id, district, branch_name, address, routing_no, phone_email,
                area_keywords, source_url, updated_at, search_text
         FROM branches
-        WHERE lower(district) = 'dhaka'
-        ORDER BY id
+        WHERE lower(district) = lower(?)
+        ORDER BY lower(branch_name), id
         LIMIT ?
-    """, (limit,))
+    """, (district, limit))
     branches = [row_to_branch(row) for row in cursor.fetchall()]
     connection.close()
     return branches
 
 
-def search_dhaka_branches(query, limit=3):
+def get_first_dhaka_branches(limit=5):
+    return get_first_branches("Dhaka", limit=limit)
+
+
+def search_branches(query, limit=3):
     ensure_branch_database_ready(auto_scrape=True)
     query_terms = extract_branch_query_terms(query)
+    requested_districts = branch_districts_from_query(query)
+
+    if not query_terms and requested_districts:
+        return get_first_branches(requested_districts[0], limit=limit)
 
     if not query_terms:
         return []
@@ -361,7 +499,6 @@ def search_dhaka_branches(query, limit=3):
         SELECT id, district, branch_name, address, routing_no, phone_email,
                area_keywords, source_url, updated_at, search_text
         FROM branches
-        WHERE lower(district) = 'dhaka'
     """)
     branches = [row_to_branch(row) for row in cursor.fetchall()]
     connection.close()
@@ -369,6 +506,9 @@ def search_dhaka_branches(query, limit=3):
     scored_branches = []
 
     for branch in branches:
+        if requested_districts and branch["district"] not in requested_districts:
+            continue
+
         score = score_branch(branch, query_terms, normalized_query)
 
         if score > 0:
@@ -381,30 +521,50 @@ def search_dhaka_branches(query, limit=3):
     return [branch for _, branch in scored_branches[:limit]]
 
 
+def search_dhaka_branches(query, limit=3):
+    return search_branches(f"Dhaka {query}", limit=limit)
+
+
+def branch_table_cell(value):
+    return " ".join(str(value or "N/A").split()).replace("|", "/")
+
+
 def format_branch_reply(branches, area_query):
     if not branches:
+        requested_districts = branch_districts_from_query(area_query)
+        district_hint = (
+            requested_districts[0]
+            if requested_districts
+            else BRANCH_SUPPORTED_DISTRICT_LABEL
+        )
+
         return (
-            "I could not find a matching EBL branch in Dhaka for that area. "
-            "Please try another nearby area such as Gulshan, Mirpur, "
-            "Dhanmondi, Motijheel, Uttara or Banani."
+            f"I could not find a matching EBL branch in {district_hint} for that area. "
+            "Please try another nearby area or district."
         )
 
     area_terms = extract_branch_query_terms(area_query)
     area_label = " ".join(area_terms).title() if area_terms else "your area"
-    lines = [f"EBL Dhaka branches matching {area_label}:"]
+    branch_districts = sorted({branch["district"] for branch in branches})
 
-    for index, branch in enumerate(branches, start=1):
-        lines.extend([
-            "",
-            f"{index}. {branch['branch_name']}",
-            f"Address: {branch['address']}",
-        ])
+    if len(branch_districts) == 1:
+        lines = [f"EBL {branch_districts[0]} branches matching {area_label}:"]
+    else:
+        lines = [f"EBL branches matching {area_label}:"]
 
-        if branch["routing_no"]:
-            lines.append(f"Routing No.: {branch['routing_no']}")
+    lines.extend([
+        "",
+        "| Branch | Address | Routing No. | Phone & Email |",
+        "| --- | --- | --- | --- |",
+    ])
 
-        if branch["phone_email"]:
-            lines.append(f"Phone & Email: {branch['phone_email']}")
+    for branch in branches:
+        lines.append(
+            f"| {branch_table_cell(branch['branch_name'])} | "
+            f"{branch_table_cell(branch['address'])} | "
+            f"{branch_table_cell(branch['routing_no'])} | "
+            f"{branch_table_cell(branch['phone_email'])} |"
+        )
 
     lines.extend([
         "",
@@ -414,7 +574,11 @@ def format_branch_reply(branches, area_query):
     return "\n".join(lines)
 
 
-def build_dhaka_branch_reply(query):
+def build_branch_locator_reply(query):
     ensure_branch_database_ready(auto_scrape=True)
-    branches = search_dhaka_branches(query)
+    branches = search_branches(query)
     return format_branch_reply(branches, query)
+
+
+def build_dhaka_branch_reply(query):
+    return build_branch_locator_reply(f"Dhaka {query}")
