@@ -66,13 +66,29 @@ const MAIN_MENU_QUICK_ACTIONS = [
   "Locate Us",
 ];
 const DISTRICT_QUICK_ACTIONS = [
+  "Bagerhat",
+  "Barishal",
+  "Bogura",
+  "Brahmanbaria",
   "Chattogram",
+  "Cox's Bazar",
+  "Cumilla",
   "Dhaka",
+  "Faridpur",
+  "Feni",
   "Gazipur",
+  "Jashore",
+  "Kishoreganj",
   "Khulna",
+  "Moulvibazar",
+  "Mymensingh",
   "Narayanganj",
+  "Narsingdi",
   "Noakhali",
+  "Rajshahi",
+  "Rangpur",
   "Sylhet",
+  "Tangail",
 ];
 const SCOPED_BACK_MESSAGE = "Back";
 const COMPLAINT_CELL_DEFAULT_EMAIL = "ccs.cmc@ebl-bd.com";

@@ -11,13 +11,29 @@ BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "EBL_chatbot.db"
 BRANCH_SOURCE_URL = "https://www.ebl.com.bd/branches"
 BRANCH_SUPPORTED_DISTRICTS = tuple(sorted((
+    "Bagerhat",
+    "Barishal",
+    "Bogura",
+    "Brahmanbaria",
     "Dhaka",
     "Chattogram",
+    "Cox's Bazar",
+    "Cumilla",
+    "Faridpur",
+    "Feni",
     "Gazipur",
+    "Jashore",
+    "Kishoreganj",
     "Khulna",
+    "Moulvibazar",
+    "Mymensingh",
     "Narayanganj",
+    "Narsingdi",
     "Noakhali",
+    "Rajshahi",
+    "Rangpur",
     "Sylhet",
+    "Tangail",
 )))
 BRANCH_DISTRICT_MENU_REPLY = "Which district branch do you want to locate?"
 BRANCH_DISTRICT_QUICK_ACTIONS = list(BRANCH_SUPPORTED_DISTRICTS)
@@ -26,31 +42,63 @@ BRANCH_SUPPORTED_DISTRICT_LABEL = ", ".join(BRANCH_SUPPORTED_DISTRICTS[:-1]) + (
 )
 BRANCH_AREA_PROMPT = (
     "Please tell me your district or area, for example Gulshan in Dhaka, "
-    "Agrabad in Chattogram, Board Bazar in Gazipur, Fulbarigate in Khulna, "
+    "Agrabad in Chattogram, Cox's Bazar Sadar in Cox's Bazar, "
+    "Board Bazar in Gazipur, Fulbarigate in Khulna, "
     "Sonargaon in Narayanganj, Maijdee in Noakhali, or Upashahar in Sylhet."
 )
 BRANCH_DISTRICT_ALIASES = {
+    "bagerhat": "Bagerhat",
+    "bagherhat": "Bagerhat",
+    "barisal": "Barishal",
+    "barishal": "Barishal",
+    "bogra": "Bogura",
+    "bogura": "Bogura",
+    "brahman baria": "Brahmanbaria",
+    "brahmanbaria": "Brahmanbaria",
+    "brahmonbaria": "Brahmanbaria",
     "dhaka": "Dhaka",
     "dacca": "Dhaka",
     "chattogram": "Chattogram",
     "chattagram": "Chattogram",
     "chittagong": "Chattogram",
     "ctg": "Chattogram",
+    "cox bazar": "Cox's Bazar",
+    "cox s bazar": "Cox's Bazar",
+    "coxsbazar": "Cox's Bazar",
+    "coxs bazar": "Cox's Bazar",
+    "cumilla": "Cumilla",
+    "comilla": "Cumilla",
+    "faridpur": "Faridpur",
+    "feni": "Feni",
     "gajipur": "Gazipur",
     "gazipur": "Gazipur",
     "gazipore": "Gazipur",
+    "jashore": "Jashore",
+    "jessore": "Jashore",
+    "kishoreganj": "Kishoreganj",
+    "kishorganj": "Kishoreganj",
     "khulna": "Khulna",
     "kulna": "Khulna",
+    "maulvibazar": "Moulvibazar",
+    "moulavi bazar": "Moulvibazar",
+    "moulvibazar": "Moulvibazar",
+    "mymensing": "Mymensingh",
+    "mymensingh": "Mymensingh",
     "narayanganj": "Narayanganj",
     "narayangonj": "Narayanganj",
     "narayagonj": "Narayanganj",
     "nganj": "Narayanganj",
+    "narsingdi": "Narsingdi",
+    "narsingdhi": "Narsingdi",
     "noakhali": "Noakhali",
     "noakali": "Noakhali",
     "noakhally": "Noakhali",
+    "rajshahi": "Rajshahi",
+    "rangpur": "Rangpur",
     "silet": "Sylhet",
     "sylhet": "Sylhet",
     "sylhett": "Sylhet",
+    "tangail": "Tangail",
 }
 
 
@@ -67,13 +115,29 @@ BRANCH_QUERY_STOP_WORDS = {
     "branch",
     "branches",
     "brance",
+    "bagerhat",
+    "bagherhat",
+    "barisal",
+    "barishal",
+    "bogra",
+    "bogura",
+    "brahman",
+    "brahmanbaria",
+    "brahmonbaria",
     "chattogram",
     "chattagram",
     "chittagong",
+    "comilla",
+    "cox",
+    "coxs",
+    "coxsbazar",
     "ctg",
+    "cumilla",
     "dhaka",
     "ebl",
     "eastern",
+    "faridpur",
+    "feni",
     "find",
     "for",
     "gajipur",
@@ -84,16 +148,27 @@ BRANCH_QUERY_STOP_WORDS = {
     "i",
     "in",
     "is",
+    "jashore",
+    "jessore",
+    "kishoreganj",
+    "kishorganj",
     "khulna",
     "koi",
     "kothay",
     "kulna",
     "locate",
     "location",
+    "maulvibazar",
     "me",
+    "moulavi",
+    "moulvibazar",
+    "mymensing",
+    "mymensingh",
     "narayanganj",
     "narayagonj",
     "narayangonj",
+    "narsingdi",
+    "narsingdhi",
     "near",
     "nearest",
     "nganj",
@@ -103,10 +178,13 @@ BRANCH_QUERY_STOP_WORDS = {
     "of",
     "plc",
     "please",
+    "rajshahi",
+    "rangpur",
     "show",
     "silet",
     "sylhet",
     "sylhett",
+    "tangail",
     "the",
     "to",
     "us",
@@ -229,7 +307,14 @@ def branch_districts_from_query(query):
     districts = []
 
     for alias, district in BRANCH_DISTRICT_ALIASES.items():
-        if alias in query_tokens and district not in districts:
+        alias_tokens = alias.split()
+        alias_found = (
+            alias in query_tokens
+            if len(alias_tokens) == 1
+            else f" {alias} " in f" {normalized_query} "
+        )
+
+        if alias_found and district not in districts:
             districts.append(district)
 
     return districts
@@ -244,13 +329,29 @@ def branch_district_from_query(query):
 def branch_area_prompt(district):
     district = canonical_branch_district(district)
     example_area = {
+        "Bagerhat": "Mongla",
+        "Barishal": "Barishal Branch",
+        "Bogura": "Bogura Branch",
+        "Brahmanbaria": "Brahmanbaria Branch",
         "Dhaka": "Gulshan",
         "Chattogram": "Agrabad",
+        "Cox's Bazar": "Cox's Bazar Branch",
+        "Cumilla": "Cumilla SME-AGRI Branch",
+        "Faridpur": "Faridpur Branch",
+        "Feni": "Feni SME-AGRI Branch",
         "Gazipur": "Board Bazar",
+        "Jashore": "Jashore Branch",
+        "Kishoreganj": "Bhairab",
         "Khulna": "Fulbarigate",
+        "Moulvibazar": "Moulvibazar Branch",
+        "Mymensingh": "Mymensingh SME-AGRI Branch",
         "Narayanganj": "Sonargaon",
+        "Narsingdi": "Madhabdi",
         "Noakhali": "Maijdee",
+        "Rajshahi": "Rajshahi Branch",
+        "Rangpur": "Rangpur Branch",
         "Sylhet": "Upashahar",
+        "Tangail": "Tangail Branch",
     }.get(district, "Gulshan")
 
     return f"Please tell me your area, for example {example_area} in {district}."

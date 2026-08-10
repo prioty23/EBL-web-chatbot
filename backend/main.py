@@ -4074,6 +4074,70 @@ def is_account_menu_reset_request(message):
     }
 
 
+def build_top_level_menu_response(message):
+    normalized_message = normalize_literal_menu_text(message)
+
+    if is_account_menu_reset_request(message):
+        return {
+            "reply": ACCOUNT_CATEGORY_QUESTION,
+            "source": "account-router",
+            "status": "answered",
+        }
+
+    if normalized_message in {"loan information", "loan info"}:
+        return {
+            "reply": LOAN_CATEGORY_QUESTION,
+            "source": "loan-router",
+            "status": "answered",
+        }
+
+    if normalized_message in {"card information", "card support"}:
+        return {
+            "reply": CARD_CATEGORY_QUESTION,
+            "source": "card-router",
+            "status": "answered",
+        }
+
+    if normalized_message in {
+        "schedule of charges",
+        "charges schedule",
+        "schedule charges",
+        "banking charges",
+        "banking charge",
+    }:
+        return {
+            "reply": SCHEDULE_CHARGES_MENU_REPLY,
+            "source": "schedule-charges-menu",
+            "status": "answered",
+        }
+
+    if normalized_message in {
+        "interest rate",
+        "interest rates",
+    }:
+        return {
+            "reply": INTEREST_RATE_TYPE_REPLY,
+            "source": "interest-rate-router",
+            "status": "answered",
+        }
+
+    if normalized_message in {"contact", "contact us"}:
+        return {
+            "reply": get_contact_reply(message),
+            "source": "contact-agent",
+            "status": "answered",
+        }
+
+    if is_locate_us_request(message):
+        return {
+            "reply": BRANCH_DISTRICT_MENU_REPLY,
+            "source": "branch-locator-agent",
+            "status": "answered",
+        }
+
+    return None
+
+
 def clean_document_line(line):
     replacements = {
         "\u2018": "'",
@@ -7432,13 +7496,15 @@ def chat(request: ChatRequest):
             status="answered",
         )
 
-    if is_locate_us_request(user_message):
+    top_level_menu_response = build_top_level_menu_response(user_message)
+
+    if top_level_menu_response:
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
-            reply=BRANCH_DISTRICT_MENU_REPLY,
-            source="branch-locator-agent",
-            status="answered",
+            reply=top_level_menu_response["reply"],
+            source=top_level_menu_response["source"],
+            status=top_level_menu_response["status"],
         )
 
     if last_reply_was_branch_district_prompt(session_id):
