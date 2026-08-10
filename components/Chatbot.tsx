@@ -21,6 +21,16 @@ type ChatApiResponse = {
   chat_id?: number;
 };
 
+type LiveChatSession = {
+  support_session_id?: string;
+  status?: string;
+};
+
+type LiveChatApiResponse = {
+  message?: string;
+  session?: LiveChatSession;
+};
+
 type SendMessageOptions = {
   silentUserMessage?: boolean;
   replaceLatestBotMessage?: boolean;
@@ -53,8 +63,12 @@ type ComplaintCellDetails = {
 const chatbotText = translations.en.chatbot;
 const CHATBOT_API_URL = "http://127.0.0.1:8000/chat";
 const CHATBOT_FEEDBACK_API_URL = "http://127.0.0.1:8000/chat/feedback";
+const LIVE_CHAT_SESSION_API_URL = "http://127.0.0.1:8000/live-chat/sessions";
 const ERROR_MESSAGE =
   "Sorry, I could not connect to the chatbot server. Please try again later.";
+const HUMAN_SUPPORT_ACTION = "Human Support";
+const HUMAN_SUPPORT_WAITING_MESSAGE =
+  "You are now in queue. Please wait for an EBL support agent.";
 const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
@@ -64,6 +78,7 @@ const MAIN_MENU_QUICK_ACTIONS = [
   "Interest Rate",
   "Contact Us",
   "Locate Us",
+  HUMAN_SUPPORT_ACTION,
 ];
 const DISTRICT_QUICK_ACTIONS = [
   "Bagerhat",
@@ -377,6 +392,32 @@ function QuickActionIcon({
         />
         <path
           d="M14 4.5V8h3M11 10.5v4M11 17h.01"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (normalizedAction.includes("human support")) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M5 12a7 7 0 0 1 14 0v3.5A2.5 2.5 0 0 1 16.5 18H15"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M5 12v2.5A1.5 1.5 0 0 0 6.5 16H8v-5H6.5A1.5 1.5 0 0 0 5 12.5M19 12v2.5a1.5 1.5 0 0 1-1.5 1.5H16v-5h1.5A1.5 1.5 0 0 1 19 12.5M12 18h3"
           stroke="currentColor"
           strokeWidth="1.8"
           strokeLinecap="round"
@@ -1354,6 +1395,74 @@ export default function Chatbot() {
     }
   };
 
+  const requestHumanSupport = async () => {
+    if (isLoading) {
+      return;
+    }
+
+    const currentSessionId = getCurrentSessionId();
+    const chatWithUserMessage: Message[] = [
+      ...messages,
+      { role: "user", text: HUMAN_SUPPORT_ACTION },
+    ];
+
+    setHasStartedConversation(true);
+    setShowEndConfirmation(false);
+    setMessages(chatWithUserMessage);
+    setInput("");
+    setIsLoading(true);
+
+    const minimumResponseDelay = wait(BOT_RESPONSE_DELAY_MS);
+
+    try {
+      const response = await fetch(LIVE_CHAT_SESSION_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: currentSessionId,
+          customer_name: "Customer",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Live chat request failed");
+      }
+
+      const data = (await response.json()) as LiveChatApiResponse;
+      const waitingMessage: Message = {
+        role: "bot",
+        text: HUMAN_SUPPORT_WAITING_MESSAGE,
+        source: "live-chat-agent",
+      };
+
+      if (data.session?.support_session_id) {
+        localStorage.setItem(
+          "eastern_ai_live_chat_session_id",
+          data.session.support_session_id,
+        );
+      }
+
+      await minimumResponseDelay;
+
+      setMessages([...chatWithUserMessage, waitingMessage]);
+    } catch {
+      await minimumResponseDelay;
+
+      setMessages([
+        ...chatWithUserMessage,
+        {
+          role: "bot",
+          text: ERROR_MESSAGE,
+          source: "live-chat-agent",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await sendMessage(input);
@@ -1436,26 +1545,32 @@ export default function Chatbot() {
   const renderQuickActionButton = (action: string) => {
     const isMainAction = isMainMenuQuickAction(action);
     const isDistrictAction = isDistrictQuickAction(action);
+    const isWideMainAction = isMainAction && action === HUMAN_SUPPORT_ACTION;
 
     return (
       <button
         key={action}
         type="button"
         onClick={() => {
+          if (action === HUMAN_SUPPORT_ACTION) {
+            void requestHumanSupport();
+            return;
+          }
+
           void sendMessage(action);
         }}
         disabled={isLoading}
         className={
           isMainAction
-            ? "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-full border border-[#006A4E]/70 bg-white px-3 py-2 text-left text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60"
+            ? `${isWideMainAction ? "col-span-2" : ""} flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-full border border-[#006A4E]/45 bg-white px-2.5 py-2 text-center text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:border-[#006A4E]/70 hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60`
             : isDistrictAction
               ? "group flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-xl border border-[#006A4E]/20 bg-[#F5FBF8] px-3 py-2.5 text-left text-[13px] font-semibold leading-tight text-[#004D39] shadow-sm transition hover:-translate-y-0.5 hover:border-[#006A4E]/55 hover:bg-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
             : "min-w-0 rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
         }
       >
         {isMainAction ? (
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[#006A4E]">
-            <QuickActionIcon action={action} />
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#006A4E]">
+            <QuickActionIcon action={action} className="h-4 w-4" />
           </span>
         ) : null}
         {isDistrictAction ? (
@@ -1465,7 +1580,9 @@ export default function Chatbot() {
         ) : null}
         <span
           className={
-            isDistrictAction
+            isMainAction
+              ? "min-w-0 whitespace-nowrap"
+              : isDistrictAction
               ? "min-w-0 flex-1 whitespace-nowrap"
               : "min-w-0 flex-1 break-words [overflow-wrap:anywhere]"
           }
@@ -1799,7 +1916,7 @@ export default function Chatbot() {
                                 isMainMenuQuickActionList(
                                   message.quickActions,
                                 )
-                                  ? "mt-3 grid max-w-[92%] grid-cols-2 gap-2.5"
+                                  ? "mt-3 grid max-w-full grid-cols-2 gap-2"
                                   : isDistrictQuickActionList(
                                       message.quickActions,
                                     )

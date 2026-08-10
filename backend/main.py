@@ -13,6 +13,10 @@ from schemas import (
     ChatFeedbackRequest,
     ChatResponse,
     ComplaintStatusUpdateRequest,
+    LiveChatAcceptRequest,
+    LiveChatEndRequest,
+    LiveChatMessageRequest,
+    LiveChatStartRequest,
 )
 
 from email_sender import send_final_status_email
@@ -57,6 +61,17 @@ from database import (
     get_pending_complaint,
     delete_pending_complaint,
     mark_final_status_email_sent,
+)
+
+from live_chat_database import (
+    accept_live_chat_session,
+    create_live_chat_database,
+    create_live_chat_session,
+    end_live_chat_session,
+    get_live_chat_messages,
+    get_live_chat_session,
+    get_waiting_live_chat_sessions,
+    save_live_chat_message,
 )
 
 from website_scraper import get_internal_links_from_website, get_text_from_website
@@ -258,6 +273,7 @@ MAIN_QUICK_ACTIONS = [
     "Interest Rate",
     "Contact Us",
     "Locate Us",
+    "Human Support",
 ]
 SCHEDULE_CHARGE_QUICK_ACTIONS = [
     "Retail Charges",
@@ -7388,6 +7404,7 @@ def startup_event():
     ensure_deposit_rate_database_ready()
     ensure_lending_rate_database_ready()
     ensure_branch_database_ready()
+    create_live_chat_database()
     import_account_types(clear_existing=True)
     ensure_account_types_ready()
     import_loan_types(clear_existing=True)
@@ -7424,6 +7441,165 @@ def health_check():
     return {
         "status": "ok",
         "service": "eastern-bank-plc-chatbot-backend"
+    }
+
+
+@app.post("/live-chat/sessions")
+def start_live_chat_session(request: LiveChatStartRequest):
+    session_id = request.session_id or "default-session"
+    customer_name = request.customer_name or "Customer"
+    live_chat_session = create_live_chat_session(
+        chat_session_id=session_id,
+        customer_name=customer_name,
+    )
+
+    return {
+        "message": "Human support request created. Please wait for an agent.",
+        "session": live_chat_session,
+    }
+
+
+@app.get("/live-chat/sessions/waiting")
+def list_waiting_live_chat_sessions(limit: int = 20):
+    return {
+        "sessions": get_waiting_live_chat_sessions(limit=limit),
+    }
+
+
+@app.get("/live-chat/sessions/{support_session_id}")
+def get_live_chat_session_details(support_session_id: str):
+    live_chat_session = get_live_chat_session(support_session_id)
+
+    if not live_chat_session:
+        raise HTTPException(
+            status_code=404,
+            detail="Live chat session not found.",
+        )
+
+    return {
+        "session": live_chat_session,
+    }
+
+
+@app.post("/live-chat/sessions/{support_session_id}/accept")
+def accept_live_chat_support_session(
+    support_session_id: str,
+    request: LiveChatAcceptRequest,
+):
+    result = accept_live_chat_session(
+        support_session_id=support_session_id,
+        agent_id=request.agent_id or "agent",
+    )
+
+    if result["reason"] == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail="Live chat session not found.",
+        )
+
+    if result["reason"] == "ended":
+        raise HTTPException(
+            status_code=400,
+            detail="This live chat session has already ended.",
+        )
+
+    if result["reason"] == "active_chat_exists":
+        raise HTTPException(
+            status_code=409,
+            detail="Another live chat session is already active.",
+        )
+
+    return {
+        "message": "Live chat session accepted.",
+        "session": result["session"],
+    }
+
+
+@app.get("/live-chat/sessions/{support_session_id}/messages")
+def list_live_chat_messages(
+    support_session_id: str,
+    after_id: int = 0,
+    limit: int = 100,
+):
+    live_chat_session = get_live_chat_session(support_session_id)
+
+    if not live_chat_session:
+        raise HTTPException(
+            status_code=404,
+            detail="Live chat session not found.",
+        )
+
+    return {
+        "session": live_chat_session,
+        "messages": get_live_chat_messages(
+            support_session_id=support_session_id,
+            after_id=after_id,
+            limit=limit,
+        ),
+    }
+
+
+@app.post("/live-chat/sessions/{support_session_id}/messages")
+def create_live_chat_message(
+    support_session_id: str,
+    request: LiveChatMessageRequest,
+):
+    result = save_live_chat_message(
+        support_session_id=support_session_id,
+        sender_type=request.sender_type,
+        sender_id=request.sender_id or "",
+        message=request.message,
+    )
+
+    if result["reason"] == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail="Live chat session not found.",
+        )
+
+    if result["reason"] == "ended":
+        raise HTTPException(
+            status_code=400,
+            detail="This live chat session has already ended.",
+        )
+
+    if result["reason"] == "invalid_sender_type":
+        raise HTTPException(
+            status_code=400,
+            detail="Sender type must be customer, agent or system.",
+        )
+
+    if result["reason"] == "empty_message":
+        raise HTTPException(
+            status_code=400,
+            detail="Message cannot be empty.",
+        )
+
+    return {
+        "message": "Live chat message saved.",
+        "chat_message": result["message"],
+    }
+
+
+@app.post("/live-chat/sessions/{support_session_id}/end")
+def end_live_chat_support_session(
+    support_session_id: str,
+    request: LiveChatEndRequest,
+):
+    result = end_live_chat_session(
+        support_session_id=support_session_id,
+        ended_by=request.ended_by or "agent",
+    )
+
+    if result["reason"] == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail="Live chat session not found.",
+        )
+
+    return {
+        "message": "Live chat session ended.",
+        "session": result["session"],
     }
 
 

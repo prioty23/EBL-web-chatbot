@@ -23,3 +23,22 @@ class ChatFeedbackRequest(BaseModel):
 
 class ComplaintStatusUpdateRequest(BaseModel):
     status: str
+
+
+class LiveChatStartRequest(BaseModel):
+    session_id: Optional[str] = None
+    customer_name: Optional[str] = None
+
+
+class LiveChatAcceptRequest(BaseModel):
+    agent_id: Optional[str] = None
+
+
+class LiveChatMessageRequest(BaseModel):
+    sender_type: str
+    message: str
+    sender_id: Optional[str] = None
+
+
+class LiveChatEndRequest(BaseModel):
+    ended_by: Optional[str] = None
