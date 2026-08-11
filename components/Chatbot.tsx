@@ -126,6 +126,9 @@ const INTEREST_RATE_MENU_SOURCES = new Set([
   "deposit-rate-database",
   "lending-rate-database",
 ]);
+const CARD_INFORMATION_MENU_SOURCES = new Set(["card-router"]);
+const ACCOUNT_MENU_SOURCES = new Set(["account-router"]);
+const LOAN_MENU_SOURCES = new Set(["loan-router"]);
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -1190,6 +1193,59 @@ function isInterestRateOptionText(text: string, actions?: string[]) {
   );
 }
 
+function isCardInformationOptionText(text: string, actions?: string[]) {
+  const normalizedText = text.toLowerCase();
+  const isCardInformationRoot = hasAnyAction(actions, [
+    "Debit Card",
+    "Credit Card",
+    "Prepaid Card",
+    "Islamic Card",
+  ]);
+
+  return (
+    isCardInformationRoot ||
+    normalizedText.includes("card type do you want to know") ||
+    normalizedText.includes("card options include") ||
+    normalizedText.includes("please tell me the specific card name") ||
+    normalizedText.includes("please tell me the specific credit card name") ||
+    normalizedText.includes("please tell me the specific debit card name") ||
+    normalizedText.includes("please tell me the specific prepaid card name") ||
+    normalizedText.includes("please tell me the specific islamic card name")
+  );
+}
+
+function isAccountOptionText(text: string, actions?: string[]) {
+  const normalizedText = text.toLowerCase();
+  const isAccountRoot = hasAnyAction(actions, [
+    "Retail Account",
+    "SME Account",
+    "Islamic Account",
+  ]);
+
+  return (
+    isAccountRoot ||
+    normalizedText.includes("account type do you want") ||
+    normalizedText.includes("account category do you want") ||
+    normalizedText.includes("accounts include") ||
+    normalizedText.includes("deposit options include") ||
+    normalizedText.includes("please tell me the specific account name") ||
+    normalizedText.includes("please tell me the specific deposit product name")
+  );
+}
+
+function isLoanOptionText(text: string, actions?: string[]) {
+  const normalizedText = text.toLowerCase();
+  const isLoanRoot = hasAnyAction(actions, ["Retail Loans", "SME Loans"]);
+
+  return (
+    isLoanRoot ||
+    normalizedText.includes("loan type do you want") ||
+    normalizedText.includes("loan category do you want") ||
+    normalizedText.includes("loan options include") ||
+    normalizedText.includes("please tell me the specific loan name")
+  );
+}
+
 function isScopedOptionMenuMessage(message: Message | null) {
   if (!message || message.role !== "bot" || !message.quickActions?.length) {
     return false;
@@ -1198,8 +1254,14 @@ function isScopedOptionMenuMessage(message: Message | null) {
   return (
     hasMenuSource(message, SCHEDULE_CHARGE_MENU_SOURCES) ||
     hasMenuSource(message, INTEREST_RATE_MENU_SOURCES) ||
+    hasMenuSource(message, CARD_INFORMATION_MENU_SOURCES) ||
+    hasMenuSource(message, ACCOUNT_MENU_SOURCES) ||
+    hasMenuSource(message, LOAN_MENU_SOURCES) ||
     isScheduleChargeOptionText(message.text, message.quickActions) ||
-    isInterestRateOptionText(message.text, message.quickActions)
+    isInterestRateOptionText(message.text, message.quickActions) ||
+    isCardInformationOptionText(message.text, message.quickActions) ||
+    isAccountOptionText(message.text, message.quickActions) ||
+    isLoanOptionText(message.text, message.quickActions)
   );
 }
 

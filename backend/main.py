@@ -827,6 +827,7 @@ CARD_CATEGORY_QUESTION = (
     "Which EBL card type do you want to know about: Debit, Credit, Prepaid or Islamic card?"
 )
 
+CARD_LISTING_PAGE_URL = "https://www.ebl.com.bd/retail/EBL-Cards"
 CARD_APPLY_NOW_LINK = "https://www.ebl.com.bd/onlineapply"
 
 
@@ -854,52 +855,52 @@ CARD_CATEGORY_PRODUCTS = {
         "EBL Visa Women's Platinum Debit Card",
     ],
     "credit": [
-        "Diners Club Credit Card",
-        "Diners Club Vroom Co Brand Credit Card",
-        "EBL Banglalink Mastercard Co Brand Titanium Credit Card",
-        "EBL Banglalink Mastercard Co Brand World Credit Card",
-        "EBL Basis Co Branded Credit Mastercard",
-        "EBL Daraz Visa Co Brand Credit Card",
-        "EBL Lavender Visa Co Brand Credit",
-        "EBL Pickaboo Mastercard Co Brand Titanium Credit Card",
-        "EBL Pickaboo Mastercard Co Brand World Credit Card",
-        "EBL ShareTrip Mastercard Co Brand Credit Card",
-        "EBL Shwapno Co Branded Titanium Credit Mastercard",
-        "EBL Stellar Platinum Credit Card",
-        "EBL Stellar Signature Credit Card",
-        "EBL Visa Air Force Platinum Credit Card",
-        "EBL Visa Army Platinum Credit Card",
         "EBL Visa Classic Credit Card",
         "EBL Visa Gold Credit Card",
-        "EBL Visa Navy Platinum Credit Card",
         "EBL Visa Platinum Credit Card",
         "EBL Visa Women Platinum Credit Card",
-        "EBL Wander Woman Co Brand Credit Mastercard",
-        "EBL World Credit Mastercard",
-        "Mastercard Titanium Credit Card",
-        "Meena Bazar Co Branded Visa Credit Card",
-        "UnionPay Contactless Platinum Credit Card",
-        "Visa Corporate Platinum Credit Card",
-        "Visa Infinite Credit Card",
-        "Visa Signature Acci Shield Credit Card",
         "Visa Signature Lite Credit Card",
+        "Visa Signature Acci-shield Credit Card",
+        "Mastercard Titanium Credit Card",
+        "Mastercard World Credit Card",
+        "EBL Diners Club International Credit Card",
+        "UnionPay Contactless Platinum Credit Card",
+        "EBL Vroom Diners Club",
+        "Visa Corporate Platinum Credit Card",
+        "EBL Visa Air Force Platinum Credit Card",
+        "EBL Visa Army Platinum Credit Card",
+        "EBL Visa Navy Platinum Credit Card",
+        "Meena Bazar Co-Branded Visa Credit Card",
+        "EBL Shwapno Co-Branded Titanium Credit Mastercard",
+        "EBL Basis Co-Branded Credit Mastercard",
+        "EBL Wander Woman Co-Brand Credit Mastercard",
+        "EBL ShareTrip Mastercard Co-Brand Credit Card",
+        "EBL Vroom Fuel Card",
         "Visa Women Signature Credit Card",
+        "EBL Lavender Visa Co-brand Credit Card",
+        "EBL-Daraz Visa Co-brand Credit Card",
+        "EBL-Banglalink Mastercard Co-Brand World Credit Card",
+        "EBL-Banglalink Mastercard Co-Brand Titanium Credit Card",
+        "Ebl-Pickaboo Mastercard Co-Brand Titanium Credit Card",
+        "Ebl-Pickaboo Mastercard Co-Brand World Credit Card",
+        "EBL Stellar Platinum Credit Card",
+        "EBL Stellar Signature Credit Card",
+        "Visa Infinite Credit Card",
+        "EBL Mastercard World Elite Biometric Metal Credit Card",
     ],
     "prepaid": [
-        "EBL Virtual Prepaid Card",
-        "EBL Banglalink Mastercard Co Brand Prepaid Card",
-        "EBL Daraz Visa Co Brand Prepaid Card",
-        "EBL Diners Club International Global Prepaid Card",
-        "EBL Grameenphone Shopno Jabe Bari Visa Co Brand Prepaid Card",
-        "EBL Mastercard Aqua Platinum Vertical Prepaid Card",
-        "EBL Mastercard Aqua Women Prepaid Card",
-        "EBL Mastercard Basis Co Branded Prepaid Card",
-        "EBL Mastercard Medical Prepaid Card",
-        "EBL Oil & Gas Card",
-        "EBL Payroll Card",
-        "EBL UnionPay Dragon Prepaid Card",
         "EBL Visa Lifestyle Prepaid Card",
-        "EBL Wander Woman Co Brand Prepaid",
+        "EBL Payroll Card",
+        "EBL Diners Club International Global Prepaid Card",
+        "EBL UnionPay Dragon Prepaid Card",
+        "EBL Mastercard Basis Co-Branded Prepaid Card",
+        "EBL Mastercard Aqua Women Prepaid Card",
+        "EBL Wander Woman Co-Brand Prepaid",
+        "EBL-Daraz Visa Co-brand Prepaid Card",
+        "EBL Mastercard Medical Prepaid Card",
+        "EBL-Banglalink Mastercard Co-Brand Prepaid Card",
+        "EBL Grameenphone Shopno Jabe Bari Visa Co-brand Prepaid Card",
+        "EBL Mastercard Aqua Platinum Vertical Prepaid Card",
     ],
     "islamic": [
         "EBL Islamic Visa Platinum Debit Card",
@@ -974,6 +975,60 @@ CARD_PRODUCT_URLS = {
 }
 
 
+CARD_PRODUCT_URLS.update({
+    "EBL Diners Club International Credit Card": CARD_PRODUCT_URLS["Diners Club Credit Card"],
+    "EBL Vroom Diners Club": CARD_PRODUCT_URLS["Diners Club Vroom Co Brand Credit Card"],
+    "EBL-Banglalink Mastercard Co-Brand Titanium Credit Card": CARD_PRODUCT_URLS["EBL Banglalink Mastercard Co Brand Titanium Credit Card"],
+    "EBL-Banglalink Mastercard Co-Brand World Credit Card": CARD_PRODUCT_URLS["EBL Banglalink Mastercard Co Brand World Credit Card"],
+    "EBL Basis Co-Branded Credit Mastercard": CARD_PRODUCT_URLS["EBL Basis Co Branded Credit Mastercard"],
+    "EBL-Daraz Visa Co-brand Credit Card": CARD_PRODUCT_URLS["EBL Daraz Visa Co Brand Credit Card"],
+    "EBL Lavender Visa Co-brand Credit Card": CARD_PRODUCT_URLS["EBL Lavender Visa Co Brand Credit"],
+    "Ebl-Pickaboo Mastercard Co-Brand Titanium Credit Card": CARD_PRODUCT_URLS["EBL Pickaboo Mastercard Co Brand Titanium Credit Card"],
+    "Ebl-Pickaboo Mastercard Co-Brand World Credit Card": CARD_PRODUCT_URLS["EBL Pickaboo Mastercard Co Brand World Credit Card"],
+    "EBL ShareTrip Mastercard Co-Brand Credit Card": CARD_PRODUCT_URLS["EBL ShareTrip Mastercard Co Brand Credit Card"],
+    "EBL Shwapno Co-Branded Titanium Credit Mastercard": CARD_PRODUCT_URLS["EBL Shwapno Co Branded Titanium Credit Mastercard"],
+    "EBL Vroom Fuel Card": CARD_PRODUCT_URLS["EBL Oil & Gas Card"],
+    "EBL Wander Woman Co-Brand Credit Mastercard": CARD_PRODUCT_URLS["EBL Wander Woman Co Brand Credit Mastercard"],
+    "Mastercard World Credit Card": CARD_PRODUCT_URLS["EBL World Credit Mastercard"],
+    "Meena Bazar Co-Branded Visa Credit Card": CARD_PRODUCT_URLS["Meena Bazar Co Branded Visa Credit Card"],
+    "Visa Signature Acci-shield Credit Card": CARD_PRODUCT_URLS["Visa Signature Acci Shield Credit Card"],
+    "EBL Mastercard World Elite Biometric Metal Credit Card": "https://www.ebl.com.bd/metal-biometric/",
+    "EBL-Banglalink Mastercard Co-Brand Prepaid Card": CARD_PRODUCT_URLS["EBL Banglalink Mastercard Co Brand Prepaid Card"],
+    "EBL-Daraz Visa Co-brand Prepaid Card": CARD_PRODUCT_URLS["EBL Daraz Visa Co Brand Prepaid Card"],
+    "EBL Grameenphone Shopno Jabe Bari Visa Co-brand Prepaid Card": CARD_PRODUCT_URLS["EBL Grameenphone Shopno Jabe Bari Visa Co Brand Prepaid Card"],
+    "EBL Mastercard Basis Co-Branded Prepaid Card": CARD_PRODUCT_URLS["EBL Mastercard Basis Co Branded Prepaid Card"],
+    "EBL Wander Woman Co-Brand Prepaid": CARD_PRODUCT_URLS["EBL Wander Woman Co Brand Prepaid"],
+})
+
+
+CARD_PRODUCT_ALIASES = {
+    "EBL Diners Club International Credit Card": ["Diners Club Credit Card"],
+    "EBL Vroom Diners Club": ["Diners Club Vroom Co Brand Credit Card", "Vroom Diners Club"],
+    "EBL-Banglalink Mastercard Co-Brand Titanium Credit Card": ["EBL Banglalink Mastercard Co Brand Titanium Credit Card"],
+    "EBL-Banglalink Mastercard Co-Brand World Credit Card": ["EBL Banglalink Mastercard Co Brand World Credit Card"],
+    "EBL Basis Co-Branded Credit Mastercard": ["EBL Basis Co Branded Credit Mastercard"],
+    "EBL-Daraz Visa Co-brand Credit Card": ["EBL Daraz Visa Co Brand Credit Card", "EBL Daraz Visa Co Brand Credit Card"],
+    "EBL Lavender Visa Co-brand Credit Card": ["EBL Lavender Visa Co Brand Credit"],
+    "Ebl-Pickaboo Mastercard Co-Brand Titanium Credit Card": ["EBL Pickaboo Mastercard Co Brand Titanium Credit Card"],
+    "Ebl-Pickaboo Mastercard Co-Brand World Credit Card": ["EBL Pickaboo Mastercard Co Brand World Credit Card"],
+    "EBL ShareTrip Mastercard Co-Brand Credit Card": ["EBL ShareTrip Mastercard Co Brand Credit Card"],
+    "EBL Shwapno Co-Branded Titanium Credit Mastercard": ["EBL Shwapno Co Branded Titanium Credit Mastercard"],
+    "EBL Vroom Fuel Card": ["EBL Oil & Gas Card", "Vroom Fuel Card"],
+    "EBL Wander Woman Co-Brand Credit Mastercard": ["EBL Wander Woman Co Brand Credit Mastercard"],
+    "Mastercard World Credit Card": ["EBL World Credit Mastercard", "EBL Mastercard World Credit Card"],
+    "Meena Bazar Co-Branded Visa Credit Card": ["Meena Bazar Co Branded Visa Credit Card"],
+    "Visa Signature Acci-shield Credit Card": ["Visa Signature Acci Shield Credit Card", "Visa Signature Accishield Credit Card"],
+    "EBL Mastercard World Elite Biometric Metal Credit Card": ["World Elite Biometric Metal Credit Card", "Metal Biometric Credit Card"],
+    "EBL-Banglalink Mastercard Co-Brand Prepaid Card": ["EBL Banglalink Mastercard Co Brand Prepaid Card"],
+    "EBL-Daraz Visa Co-brand Prepaid Card": ["EBL Daraz Visa Co Brand Prepaid Card"],
+    "EBL Grameenphone Shopno Jabe Bari Visa Co-brand Prepaid Card": ["EBL Grameenphone Shopno Jabe Bari Visa Co Brand Prepaid Card", "EBL Grameenphone Shopno Jabe Bari"],
+    "EBL Mastercard Aqua Platinum Vertical Prepaid Card": ["EBL MASTERCARD AQUA PLATINUM VERTICAL PREPAID CARD", "EBL Mastercard Aqua", "EBL Aqua Prepaid"],
+    "EBL Mastercard Aqua Women Prepaid Card": ["EBL MASTERCARD AQUA WOMEN PREPAID CARD", "EBL Mastercard Aqua Women", "EBL Aqua Women"],
+    "EBL Mastercard Basis Co-Branded Prepaid Card": ["EBL Mastercard Basis Co Branded Prepaid Card", "EBL Mastercard Basis Prepaid Card"],
+    "EBL Wander Woman Co-Brand Prepaid": ["EBL Wander Woman Co Brand Prepaid", "EBL Wander Woman Prepaid"],
+}
+
+
 CARD_PRODUCT_RULES = []
 
 for card_category, card_products in CARD_CATEGORY_PRODUCTS.items():
@@ -982,6 +1037,7 @@ for card_category, card_products in CARD_CATEGORY_PRODUCTS.items():
             "name": card_product,
             "category": card_category,
             "url": CARD_PRODUCT_URLS[card_product],
+            "aliases": CARD_PRODUCT_ALIASES.get(card_product, []),
         })
 
 
@@ -2935,7 +2991,22 @@ INTEREST_BACK_DOMAINS = {
     "deposit_rate",
     "lending_rate",
 }
-SCOPED_BACK_DOMAINS = SCHEDULE_BACK_DOMAINS | INTEREST_BACK_DOMAINS
+CARD_INFORMATION_BACK_DOMAINS = {
+    "card_information",
+}
+ACCOUNT_BACK_DOMAINS = {
+    "account",
+}
+LOAN_BACK_DOMAINS = {
+    "loan",
+}
+SCOPED_BACK_DOMAINS = (
+    SCHEDULE_BACK_DOMAINS
+    | INTEREST_BACK_DOMAINS
+    | CARD_INFORMATION_BACK_DOMAINS
+    | ACCOUNT_BACK_DOMAINS
+    | LOAN_BACK_DOMAINS
+)
 
 
 def scoped_back_family(domain):
@@ -2944,6 +3015,15 @@ def scoped_back_family(domain):
 
     if domain in INTEREST_BACK_DOMAINS:
         return "interest"
+
+    if domain in CARD_INFORMATION_BACK_DOMAINS:
+        return "card_information"
+
+    if domain in ACCOUNT_BACK_DOMAINS:
+        return "account"
+
+    if domain in LOAN_BACK_DOMAINS:
+        return "loan"
 
     return ""
 
@@ -2959,11 +3039,23 @@ def source_for_prompt_domain(domain):
         "interest_rate": "interest-rate-router",
         "deposit_rate": "interest-rate-router",
         "lending_rate": "interest-rate-router",
+        "card_information": "card-router",
+        "account": "account-router",
+        "loan": "loan-router",
     }.get(domain, "greeting-handler")
 
 
 def scoped_navigation_state(reply, source=""):
     domain = assistant_prompt_domain(reply)
+
+    if not domain and source == "card-router":
+        domain = "card_information"
+
+    if not domain and source == "account-router":
+        domain = "account"
+
+    if not domain and source == "loan-router":
+        domain = "loan"
 
     if not domain:
         return {}
@@ -3003,6 +3095,11 @@ def record_scoped_navigation_prompt(session_id, reply, source, quick_actions):
         return
 
     if domain in {"schedule_charges", "interest_rate"}:
+        base_state = stack[0] if stack and stack[0]["domain"] == "main_menu" else main_menu_navigation_state()
+        SCOPED_NAVIGATION_STACKS[session_id] = [base_state, state]
+        return
+
+    if domain in {"card_information", "account", "loan"}:
         base_state = stack[0] if stack and stack[0]["domain"] == "main_menu" else main_menu_navigation_state()
         SCOPED_NAVIGATION_STACKS[session_id] = [base_state, state]
         return
@@ -4363,6 +4460,7 @@ def normalize_loan_lookup_text(text):
         "!": " ",
         ":": " ",
         "'": "",
+        "\xa0": " ",
     }
 
     for old_value, new_value in replacements.items():
@@ -6025,11 +6123,13 @@ def detect_card_category(message):
     return ""
 
 
-def build_card_aliases(product_name):
+def build_card_aliases(product_name, extra_aliases=None):
     aliases = [
         product_name,
         product_name.replace("EBL ", "", 1),
     ]
+
+    aliases.extend(extra_aliases or [])
 
     if "Women's" in product_name:
         aliases.append(product_name.replace("Women's", "Womens"))
@@ -6050,7 +6150,7 @@ def detect_specific_card_product(message):
         if category and product["category"] != category:
             continue
 
-        for alias in build_card_aliases(product["name"]):
+        for alias in build_card_aliases(product["name"], product.get("aliases")):
             if contains_loan_lookup_phrase(message, alias):
                 return product
 
@@ -6058,7 +6158,7 @@ def detect_specific_card_product(message):
         return None
 
     for product in CARD_PRODUCT_RULES:
-        for alias in build_card_aliases(product["name"]):
+        for alias in build_card_aliases(product["name"], product.get("aliases")):
             if contains_loan_lookup_phrase(message, alias):
                 return product
 
@@ -6501,15 +6601,208 @@ def build_card_feature_bullets(section_text, product_name, max_bullets=6):
     return bullets
 
 
+CARD_LISTING_CATEGORY_HEADINGS = {
+    "credit": "Credit Cards",
+    "debit": "Debit Cards",
+    "prepaid": "Prepaid Cards",
+    "islamic": "Islamic Cards",
+}
+
+
+def get_card_listing_page_text():
+    website_information = get_website_information_by_page_urls([CARD_LISTING_PAGE_URL])
+    page_text = get_content_from_website_information(website_information)
+
+    if page_text:
+        return page_text
+
+    try:
+        page_text = get_text_from_website(CARD_LISTING_PAGE_URL)
+
+        if page_text:
+            save_website_text(
+                page_name="EBL Cards Page",
+                page_url=CARD_LISTING_PAGE_URL,
+                page_text=page_text,
+            )
+
+    except Exception:
+        return ""
+
+    return page_text
+
+
+def slice_card_listing_category_section(page_text, category):
+    heading = CARD_LISTING_CATEGORY_HEADINGS.get(category)
+
+    if not heading:
+        return page_text
+
+    content_start = find_case_insensitive(
+        page_text,
+        "Welcome to the world of EBL Cards",
+    )
+
+    if content_start < 0:
+        content_start = 0
+
+    start = find_case_insensitive(page_text, f"\n{heading}\n", content_start)
+
+    if start < 0:
+        start = find_case_insensitive(page_text, heading, content_start)
+
+    if start < 0:
+        return page_text
+
+    section_start = start + len(heading)
+    end_positions = []
+
+    for other_category, other_heading in CARD_LISTING_CATEGORY_HEADINGS.items():
+        if other_category == category:
+            continue
+
+        position = find_case_insensitive(
+            page_text,
+            f"\n{other_heading}\n",
+            section_start,
+        )
+
+        if position >= 0:
+            end_positions.append(position)
+
+    section_end = min(end_positions) if end_positions else len(page_text)
+
+    return page_text[section_start:section_end].strip()
+
+
+def is_known_card_product_line(line):
+    normalized_line = normalize_loan_lookup_text(line)
+
+    for product in CARD_PRODUCT_RULES:
+        product_names = [product["name"]] + product.get("aliases", [])
+
+        for product_name in product_names:
+            if normalized_line == normalize_loan_lookup_text(product_name):
+                return True
+
+    return False
+
+
+def clean_card_listing_offer_line(line):
+    line = clean_loan_line(line)
+
+    if not line:
+        return ""
+
+    normalized_line = normalize_loan_lookup_text(line)
+
+    if (
+        "in hospitalization coverage" in normalized_line
+        and "cashback" in normalized_line
+    ):
+        return (
+            "Up to BDT 30,000 in-hospitalization coverage, "
+            "One by MetLife app subscription, and cashback at selected merchants"
+        )
+
+    if len(line) <= 170:
+        return line.rstrip(".")
+
+    first_sentence = re.split(r"(?<=[.!?])\s+", line, maxsplit=1)[0].strip()
+
+    if len(first_sentence) <= 170:
+        return first_sentence.rstrip(".")
+
+    words = first_sentence.split()
+    trimmed_words = []
+
+    for word in words:
+        candidate = " ".join(trimmed_words + [word])
+
+        if len(candidate) > 165:
+            break
+
+        trimmed_words.append(word)
+
+    return " ".join(trimmed_words).rstrip(",;:.")
+
+
+def build_card_listing_feature_bullets(product, max_bullets=5):
+    page_text = get_card_listing_page_text()
+
+    if not page_text:
+        return []
+
+    section = slice_card_listing_category_section(page_text, product["category"])
+    product_names = [product["name"]] + product.get("aliases", [])
+    product_name_set = {
+        normalize_loan_lookup_text(product_name)
+        for product_name in product_names
+    }
+    lines = [clean_loan_line(line) for line in section.splitlines()]
+    lines = [line for line in lines if line]
+    start_index = -1
+
+    for index, line in enumerate(lines):
+        if normalize_loan_lookup_text(line) in product_name_set:
+            start_index = index
+            break
+
+    if start_index < 0:
+        return []
+
+    special_offer_started = False
+    bullets = []
+    seen_bullets = set()
+
+    for line in lines[start_index + 1:]:
+        normalized_line = normalize_loan_lookup_text(line)
+        lower_line = line.lower()
+
+        if is_known_card_product_line(line):
+            break
+
+        if lower_line in {"readmore", "read more", "apply now"}:
+            if special_offer_started:
+                break
+
+            continue
+
+        if lower_line == "special offer":
+            special_offer_started = True
+            continue
+
+        if not special_offer_started:
+            continue
+
+        if not line or normalized_line in seen_bullets:
+            continue
+
+        bullet = clean_card_listing_offer_line(line)
+
+        if not bullet:
+            continue
+
+        seen_bullets.add(normalized_line)
+        bullets.append(bullet)
+
+        if len(bullets) >= max_bullets:
+            break
+
+    return bullets
+
+
 def build_specific_card_reply(product):
+    listing_bullets = build_card_listing_feature_bullets(product)
     page_text = get_card_product_page_text(product)
     section_text = slice_card_section(page_text, product["name"])
-    bullets = build_card_feature_bullets(section_text, product["name"])
+    detail_bullets = build_card_feature_bullets(section_text, product["name"])
+    bullets = listing_bullets or detail_bullets
 
     if bullets:
         bullet_text = "\n".join(f"- {bullet}" for bullet in bullets)
         reply = (
-            f"{product['name']} features:\n\n"
+            f"{product['name']} main features:\n\n"
             f"{bullet_text}\n\n"
             f"Details link: {product['url']}"
         )
@@ -7098,7 +7391,8 @@ def build_quick_actions(reply, source):
             or "Please tell me the specific" in reply
         )
     ):
-        return extract_bullet_quick_actions(reply, limit=30)
+        quick_action_limit = 60 if source == "card-router" else 30
+        return extract_bullet_quick_actions(reply, limit=quick_action_limit)
 
     return []
 
