@@ -239,7 +239,6 @@ from memory_recall import (
 
 from response_cleaner import clean_bank_contact_information
 
-
 ERROR_REPLY = "Sorry, I could not process that request right now. Please try again later."
 SCHEDULE_CHARGES_MENU_REPLY = (
     "Which banking charge do you want to know Retail, SME, Corporate "

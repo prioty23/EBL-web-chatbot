@@ -43,7 +43,13 @@ TEST_CASES = [
         messages=["hi"],
         sources={"greeting-handler"},
         must_contain=["Hello", "Eastern Bank"],
-        quick_actions_contain=["Open an Account", "Schedule of Charges", "Interest Rate"],
+        quick_actions_contain=[
+            "Open an Account",
+            "Loan Information",
+            "Schedule of Charges",
+            "Interest Rate",
+        ],
+        quick_actions_not_contain=["Suggest Account", "Suggest Loan"],
     ),
     QueryCase(
         name="Identity question is answered",
@@ -56,7 +62,11 @@ TEST_CASES = [
         messages=["Open an Account"],
         sources={"account-router"},
         must_contain=["Which account type"],
-        quick_actions_contain=["Retail Account", "SME Account", "Islamic Account"],
+        quick_actions_contain=[
+            "Retail Account",
+            "SME Account",
+            "Islamic Account",
+        ],
     ),
     QueryCase(
         name="Retail account shows retail categories",
@@ -126,6 +136,7 @@ TEST_CASES = [
         sources={"loan-router"},
         must_contain=["Which loan type"],
         quick_actions_contain=["Retail Loans", "SME Loans"],
+        quick_actions_not_contain=["Suggest Loan"],
     ),
     QueryCase(
         name="Retail loan asks loan category",
