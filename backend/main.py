@@ -109,6 +109,7 @@ from branch_database import (
 
 from complaint_manager import (
     has_enough_complaint_details,
+    is_customer_complaint_request,
     get_issue_type,
     build_complaint_created_reply,
     extract_complaint_id,
@@ -7741,13 +7742,15 @@ def health_check():
 def start_live_chat_session(request: LiveChatStartRequest):
     session_id = request.session_id or "default-session"
     customer_name = request.customer_name or "Customer"
+    customer_phone = request.customer_phone or ""
     live_chat_session = create_live_chat_session(
         chat_session_id=session_id,
         customer_name=customer_name,
+        customer_phone=customer_phone,
     )
 
     return {
-        "message": "Human support request created. Please wait for an agent.",
+        "message": "You are now in queue. Please wait for an EBL support agent.",
         "session": live_chat_session,
     }
 
@@ -7896,6 +7899,35 @@ def end_live_chat_support_session(
     }
 
 
+def build_complaint_create_chat_response(session_id, user_message):
+    if not has_enough_complaint_details(user_message):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=get_complaint_start_reply(),
+            source="complaint-agent",
+            status="collecting_complaint_details",
+        )
+
+    issue_type = get_issue_type(user_message)
+
+    save_pending_complaint(
+        session_id=session_id,
+        issue_type=issue_type,
+        description=user_message,
+    )
+
+    confirmation_reply = build_complaint_confirmation_reply(issue_type)
+
+    return save_and_build_response(
+        session_id=session_id,
+        user_message=user_message,
+        reply=confirmation_reply,
+        source="complaint-agent",
+        status="waiting_complaint_confirmation",
+    )
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     user_message = request.message.strip()
@@ -7975,6 +8007,9 @@ def chat(request: ChatRequest):
             source=top_level_menu_response["source"],
             status=top_level_menu_response["status"],
         )
+
+    if is_customer_complaint_request(user_message):
+        return build_complaint_create_chat_response(session_id, user_message)
 
     if last_reply_was_branch_district_prompt(session_id):
         selected_district = branch_district_from_query(user_message)
@@ -8536,32 +8571,7 @@ def chat(request: ChatRequest):
         )
 
     if intent == "complaint_create":
-        if not has_enough_complaint_details(user_message):
-            return save_and_build_response(
-                session_id=session_id,
-                user_message=user_message,
-                reply=get_complaint_start_reply(),
-                source="complaint-agent",
-                status="collecting_complaint_details",
-            )
-
-        issue_type = get_issue_type(user_message)
-
-        save_pending_complaint(
-            session_id=session_id,
-            issue_type=issue_type,
-            description=user_message,
-        )
-
-        confirmation_reply = build_complaint_confirmation_reply(issue_type)
-
-        return save_and_build_response(
-            session_id=session_id,
-            user_message=user_message,
-            reply=confirmation_reply,
-            source="complaint-agent",
-            status="waiting_complaint_confirmation",
-        )
+        return build_complaint_create_chat_response(session_id, user_message)
 
     if intent == "complaint_status":
         complaint_id = extract_complaint_id(user_message)

@@ -10,6 +10,44 @@ DIRECT_COMPLAINT_TERMS = [
     "problem",
 ]
 
+COMPLAINT_STATUS_TERMS = [
+    "complaint status",
+    "status of complaint",
+    "track complaint",
+    "check complaint",
+    "complaint id",
+    "my complaint status",
+    "cmp-",
+]
+
+COMPLAINT_CELL_TERMS = [
+    "complaint cell",
+    "complaintcell",
+    "complaint management cell",
+    "complaint mail",
+    "complaint email",
+    "complain mail",
+    "complain email",
+    "complaint form",
+    "complaint link",
+    "complaint page",
+    "query complaint",
+]
+
+COMPLAINT_CREATE_TERMS = [
+    "create complaint",
+    "submit complaint",
+    "file complaint",
+    "lodge complaint",
+    "raise complaint",
+    "make complaint",
+    "want to complain",
+    "need to complain",
+    "complain about",
+    "complaint about",
+    "report issue",
+]
+
 ISSUE_INDICATORS = [
     "failed",
     "failure",
@@ -122,6 +160,26 @@ def looks_like_customer_issue(message):
     return (
         contains_any(message, DIRECT_COMPLAINT_TERMS)
         or (has_issue_indicator(message) and has_banking_context(message))
+    )
+
+
+def is_customer_complaint_request(message):
+    message = expand_bangla_banglish_text(message).lower().strip()
+
+    if contains_any(message, COMPLAINT_STATUS_TERMS):
+        return False
+
+    if contains_any(message, COMPLAINT_CELL_TERMS):
+        return False
+
+    if has_specific_complaint_details(message):
+        return True
+
+    if contains_any(message, COMPLAINT_CREATE_TERMS):
+        return True
+
+    return contains_any(message, DIRECT_COMPLAINT_TERMS) and has_banking_context(
+        message
     )
 
 

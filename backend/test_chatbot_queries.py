@@ -437,6 +437,33 @@ TEST_CASES = [
         must_not_contain=["info@ebl-bd.com"],
     ),
     QueryCase(
+        name="Card deducted twice starts complaint flow",
+        messages=["my card charge deducted twice"],
+        sources={"complaint-agent"},
+        must_contain=[
+            "I can create a complaint record for this issue",
+            "Do you want me to create the complaint record now?",
+        ],
+        must_not_contain=[
+            "Please specify the exact charge",
+            "Debit Cards charges",
+            "Source: EBL Schedule of Charges",
+        ],
+    ),
+    QueryCase(
+        name="Debit card deducted twice starts complaint flow",
+        messages=["my debit card charge deducted twice"],
+        sources={"complaint-agent"},
+        must_contain=[
+            "I can create a complaint record for this issue",
+            "Do you want me to create the complaint record now?",
+        ],
+        must_not_contain=[
+            "Debit Cards charges",
+            "Source: EBL Schedule of Charges",
+        ],
+    ),
+    QueryCase(
         name="Locate Us shows district buttons first",
         messages=["Locate Us"],
         sources={"branch-locator-agent"},

@@ -28,6 +28,7 @@ class ComplaintStatusUpdateRequest(BaseModel):
 class LiveChatStartRequest(BaseModel):
     session_id: Optional[str] = None
     customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
 
 
 class LiveChatAcceptRequest(BaseModel):

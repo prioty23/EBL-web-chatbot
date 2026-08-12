@@ -31,6 +31,9 @@ type LiveChatApiResponse = {
   session?: LiveChatSession;
 };
 
+type HumanSupportStep = "confirm" | "name" | "phone" | null;
+type ViewTransitionDirection = "forward" | "back";
+
 type SendMessageOptions = {
   silentUserMessage?: boolean;
   replaceLatestBotMessage?: boolean;
@@ -67,8 +70,24 @@ const LIVE_CHAT_SESSION_API_URL = "http://127.0.0.1:8000/live-chat/sessions";
 const ERROR_MESSAGE =
   "Sorry, I could not connect to the chatbot server. Please try again later.";
 const HUMAN_SUPPORT_ACTION = "Human Support";
+const HUMAN_SUPPORT_CONFIRM_ACTION = "Yes";
+const HUMAN_SUPPORT_DECLINE_ACTION = "No";
+const HUMAN_SUPPORT_CONFIRM_MESSAGE =
+  "To contact an EBL Support Agent, please click Yes.";
+const HUMAN_SUPPORT_COLLECTION_MESSAGE =
+  "To ensure service quality and for future reference, your chat may be stored or monitored.\n\nBefore transferring you to an EBL Support Agent, we need some of your information.\n\nPlease enter your name.";
+const HUMAN_SUPPORT_PHONE_PROMPT = "Please enter your mobile number.";
+const HUMAN_SUPPORT_INVALID_PHONE_MESSAGE =
+  "Please enter a valid mobile number.";
+const HUMAN_SUPPORT_TRANSFER_MESSAGE =
+  "Your chat is being transferred to an EBL Support Agent. Please wait for a while.";
 const HUMAN_SUPPORT_WAITING_MESSAGE =
   "You are now in queue. Please wait for an EBL support agent.";
+const HUMAN_SUPPORT_MESSAGE_SOURCES = new Set([
+  "live-chat-agent",
+  "live-chat-support-agent",
+]);
+const LIVE_CHAT_SESSION_STORAGE_KEY = "eastern_ai_live_chat_session_id";
 const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
@@ -81,6 +100,7 @@ const MAIN_MENU_QUICK_ACTIONS = [
   HUMAN_SUPPORT_ACTION,
 ];
 const DISTRICT_QUICK_ACTIONS = [
+  "Dhaka Division",
   "Bagerhat",
   "Barishal",
   "Bogura",
@@ -113,6 +133,7 @@ const COMPLAINT_CELL_DEFAULT_FOOTER =
 
 const SESSION_STORAGE_KEY = "eastern_ai_session_id";
 const BOT_RESPONSE_DELAY_MS = 1400;
+const WIDGET_CLOSE_ANIMATION_MS = 180;
 const SCHEDULE_CHARGE_MENU_SOURCES = new Set([
   "schedule-charges-menu",
   "schedule-charges-category-menu",
@@ -1038,6 +1059,14 @@ function shouldShowFeedback(message: Message) {
   );
 }
 
+function isHumanSupportMessage(message: Message) {
+  return (
+    message.role === "bot" &&
+    Boolean(message.source) &&
+    HUMAN_SUPPORT_MESSAGE_SOURCES.has(message.source ?? "")
+  );
+}
+
 function shouldShowConversationFollowUp(
   message: Message,
   messageIndex: number,
@@ -1267,15 +1296,24 @@ function isScopedOptionMenuMessage(message: Message | null) {
 
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isWidgetClosing, setIsWidgetClosing] = useState(false);
+  const [viewTransitionDirection, setViewTransitionDirection] =
+    useState<ViewTransitionDirection>("forward");
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasStartedConversation, setHasStartedConversation] = useState(false);
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
+  const [humanSupportStep, setHumanSupportStep] =
+    useState<HumanSupportStep>(null);
+  const [humanSupportName, setHumanSupportName] = useState("");
 
   const [messages, setMessages] = useState<Message[]>([]);
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const widgetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const canEndConversation = messages.length > 0;
   const canGoBackToIntro =
     hasStartedConversation && messages.length === 0 && !isLoading;
@@ -1285,7 +1323,10 @@ export default function Chatbot() {
       return;
     }
 
-    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    messageListRef.current.scrollTo({
+      top: messageListRef.current.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages, isOpen, hasStartedConversation, isLoading]);
 
   useEffect(() => {
@@ -1306,6 +1347,43 @@ export default function Chatbot() {
     messages.length,
     showEndConfirmation,
   ]);
+
+  useEffect(() => {
+    return () => {
+      if (widgetCloseTimerRef.current) {
+        clearTimeout(widgetCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearWidgetCloseTimer = () => {
+    if (widgetCloseTimerRef.current) {
+      clearTimeout(widgetCloseTimerRef.current);
+      widgetCloseTimerRef.current = null;
+    }
+  };
+
+  const openChatbot = () => {
+    clearWidgetCloseTimer();
+    setIsWidgetClosing(false);
+    setIsOpen(true);
+  };
+
+  const minimizeChatbot = () => {
+    if (!isOpen && !isWidgetClosing) {
+      return;
+    }
+
+    clearWidgetCloseTimer();
+    setShowEndConfirmation(false);
+    setIsWidgetClosing(true);
+    setIsOpen(false);
+
+    widgetCloseTimerRef.current = setTimeout(() => {
+      setIsWidgetClosing(false);
+      widgetCloseTimerRef.current = null;
+    }, WIDGET_CLOSE_ANIMATION_MS);
+  };
 
   const getCurrentSessionId = () => {
     const savedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -1329,21 +1407,29 @@ export default function Chatbot() {
     setInput("");
     setHasStartedConversation(false);
     setShowEndConfirmation(false);
+    setHumanSupportStep(null);
+    setHumanSupportName("");
   };
 
   const handleStartConversation = () => {
+    setViewTransitionDirection("forward");
     setHasStartedConversation(true);
     setShowEndConfirmation(false);
   };
 
   const handleBackToIntro = () => {
+    setViewTransitionDirection("back");
     setInput("");
     setHasStartedConversation(false);
     setShowEndConfirmation(false);
+    setHumanSupportStep(null);
+    setHumanSupportName("");
   };
 
   const handleShowMainMenu = () => {
     setShowEndConfirmation(false);
+    setHumanSupportStep(null);
+    setHumanSupportName("");
     setMessages((currentMessages) => [
       ...currentMessages,
       {
@@ -1462,10 +1548,109 @@ export default function Chatbot() {
       return;
     }
 
-    const currentSessionId = getCurrentSessionId();
     const chatWithUserMessage: Message[] = [
       ...messages,
       { role: "user", text: HUMAN_SUPPORT_ACTION },
+    ];
+
+    setHasStartedConversation(true);
+    setShowEndConfirmation(false);
+    setHumanSupportStep("confirm");
+    setHumanSupportName("");
+    setMessages(chatWithUserMessage);
+    setInput("");
+    setIsLoading(true);
+
+    const minimumResponseDelay = wait(BOT_RESPONSE_DELAY_MS);
+
+    await minimumResponseDelay;
+
+    setMessages([
+      ...chatWithUserMessage,
+      {
+        role: "bot",
+        text: HUMAN_SUPPORT_CONFIRM_MESSAGE,
+        source: "live-chat-agent",
+        quickActions: [HUMAN_SUPPORT_CONFIRM_ACTION, HUMAN_SUPPORT_DECLINE_ACTION],
+      },
+    ]);
+    setIsLoading(false);
+  };
+
+  const confirmHumanSupport = async () => {
+    if (isLoading || humanSupportStep !== "confirm") {
+      return;
+    }
+
+    const chatWithUserMessage: Message[] = [
+      ...messages,
+      { role: "user", text: HUMAN_SUPPORT_CONFIRM_ACTION },
+    ];
+
+    setShowEndConfirmation(false);
+    setMessages(chatWithUserMessage);
+    setInput("");
+    setIsLoading(true);
+
+    const minimumResponseDelay = wait(BOT_RESPONSE_DELAY_MS);
+
+    await minimumResponseDelay;
+
+    setHumanSupportStep("name");
+    setMessages([
+      ...chatWithUserMessage,
+      {
+        role: "bot",
+        text: HUMAN_SUPPORT_COLLECTION_MESSAGE,
+        source: "live-chat-agent",
+      },
+    ]);
+    setIsLoading(false);
+  };
+
+  const declineHumanSupport = async () => {
+    if (isLoading || humanSupportStep !== "confirm") {
+      return;
+    }
+
+    const chatWithUserMessage: Message[] = [
+      ...messages,
+      { role: "user", text: HUMAN_SUPPORT_DECLINE_ACTION },
+    ];
+
+    setShowEndConfirmation(false);
+    setHumanSupportStep(null);
+    setHumanSupportName("");
+    setMessages(chatWithUserMessage);
+    setInput("");
+    setIsLoading(true);
+
+    const minimumResponseDelay = wait(BOT_RESPONSE_DELAY_MS);
+
+    await minimumResponseDelay;
+
+    setMessages([
+      ...chatWithUserMessage,
+      {
+        role: "bot",
+        text: chatbotText.welcome,
+        source: "greeting-handler",
+        quickActions: MAIN_MENU_QUICK_ACTIONS,
+      },
+    ]);
+    setIsLoading(false);
+  };
+
+  const handleHumanSupportInput = async (message: string) => {
+    const userMessage = message.trim();
+
+    if (!userMessage || isLoading || !humanSupportStep) {
+      return;
+    }
+
+    const chatWithUserMessage: Message[] = [
+      ...messages,
+      { role: "user", text: userMessage },
     ];
 
     setHasStartedConversation(true);
@@ -1476,6 +1661,47 @@ export default function Chatbot() {
 
     const minimumResponseDelay = wait(BOT_RESPONSE_DELAY_MS);
 
+    if (humanSupportStep === "name") {
+      await minimumResponseDelay;
+
+      setHumanSupportName(userMessage);
+      setHumanSupportStep("phone");
+      setMessages([
+        ...chatWithUserMessage,
+        {
+          role: "bot",
+          text: HUMAN_SUPPORT_PHONE_PROMPT,
+          source: "live-chat-agent",
+        },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
+    if (humanSupportStep !== "phone") {
+      setIsLoading(false);
+      return;
+    }
+
+    const phoneDigits = userMessage.replace(/\D/g, "");
+
+    if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+      await minimumResponseDelay;
+
+      setMessages([
+        ...chatWithUserMessage,
+        {
+          role: "bot",
+          text: HUMAN_SUPPORT_INVALID_PHONE_MESSAGE,
+          source: "live-chat-agent",
+        },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
+    const currentSessionId = getCurrentSessionId();
+
     try {
       const response = await fetch(LIVE_CHAT_SESSION_API_URL, {
         method: "POST",
@@ -1484,7 +1710,8 @@ export default function Chatbot() {
         },
         body: JSON.stringify({
           session_id: currentSessionId,
-          customer_name: "Customer",
+          customer_name: humanSupportName || "Customer",
+          customer_phone: userMessage,
         }),
       });
 
@@ -1493,21 +1720,26 @@ export default function Chatbot() {
       }
 
       const data = (await response.json()) as LiveChatApiResponse;
+      const supportSessionId = data.session?.support_session_id;
       const waitingMessage: Message = {
         role: "bot",
-        text: HUMAN_SUPPORT_WAITING_MESSAGE,
+        text: `${HUMAN_SUPPORT_TRANSFER_MESSAGE}\n\n${
+          data.message ?? HUMAN_SUPPORT_WAITING_MESSAGE
+        }`,
         source: "live-chat-agent",
       };
 
-      if (data.session?.support_session_id) {
+      if (supportSessionId) {
         localStorage.setItem(
-          "eastern_ai_live_chat_session_id",
-          data.session.support_session_id,
+          LIVE_CHAT_SESSION_STORAGE_KEY,
+          supportSessionId,
         );
       }
 
       await minimumResponseDelay;
 
+      setHumanSupportStep(null);
+      setHumanSupportName("");
       setMessages([...chatWithUserMessage, waitingMessage]);
     } catch {
       await minimumResponseDelay;
@@ -1527,6 +1759,12 @@ export default function Chatbot() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (humanSupportStep) {
+      await handleHumanSupportInput(input);
+      return;
+    }
+
     await sendMessage(input);
   };
 
@@ -1619,15 +1857,31 @@ export default function Chatbot() {
             return;
           }
 
+          if (
+            action === HUMAN_SUPPORT_CONFIRM_ACTION &&
+            humanSupportStep === "confirm"
+          ) {
+            void confirmHumanSupport();
+            return;
+          }
+
+          if (
+            action === HUMAN_SUPPORT_DECLINE_ACTION &&
+            humanSupportStep === "confirm"
+          ) {
+            void declineHumanSupport();
+            return;
+          }
+
           void sendMessage(action);
         }}
         disabled={isLoading}
         className={
           isMainAction
-            ? `${isWideMainAction ? "col-span-2" : ""} flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-full border border-[#006A4E]/45 bg-white px-2.5 py-2 text-center text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition hover:border-[#006A4E]/70 hover:bg-[#006A4E]/5 hover:shadow disabled:cursor-not-allowed disabled:opacity-60`
+            ? `${isWideMainAction ? "col-span-2" : ""} flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-full border border-[#006A4E]/45 bg-white px-2.5 py-2 text-center text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#006A4E]/70 hover:bg-[#006A4E]/5 hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100`
             : isDistrictAction
-              ? "group flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-xl border border-[#006A4E]/20 bg-[#F5FBF8] px-3 py-2.5 text-left text-[13px] font-semibold leading-tight text-[#004D39] shadow-sm transition hover:-translate-y-0.5 hover:border-[#006A4E]/55 hover:bg-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
-            : "min-w-0 rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+              ? "group flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-xl border border-[#006A4E]/20 bg-[#F5FBF8] px-3 py-2.5 text-left text-[13px] font-semibold leading-tight text-[#004D39] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#006A4E]/55 hover:bg-white hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+            : "min-w-0 rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#006A4E]/5 hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
         }
       >
         {isMainAction ? (
@@ -1663,7 +1917,7 @@ export default function Chatbot() {
     actions: string[],
     showScopedBack = false,
   ) => (
-    <div className="mt-2 w-full max-w-[92%] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="animate-ebl-service-in mt-2 w-full max-w-[92%] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600">
         <span>Select Services</span>
         {showScopedBack ? (
@@ -1688,7 +1942,7 @@ export default function Chatbot() {
               void sendMessage(action);
             }}
             disabled={isLoading}
-            className="block w-full min-w-0 px-4 py-3 text-center text-sm font-medium text-[#006A4E] transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+            className="block w-full min-w-0 px-4 py-3 text-center text-sm font-medium text-[#006A4E] transition duration-200 hover:bg-[#006A4E]/5 active:bg-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span className="block min-w-0 break-words [overflow-wrap:anywhere]">
               {action}
@@ -1785,7 +2039,7 @@ export default function Chatbot() {
             <button
               type="button"
               onClick={() => handleShowPreviousProductMenu(previousProductMenu)}
-              className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#00543E]"
+              className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98]"
             >
               View options
             </button>
@@ -1793,7 +2047,7 @@ export default function Chatbot() {
               type="button"
               onClick={handleShowMainMenu}
               disabled={isLoading}
-              className="rounded-full border border-[#006A4E]/20 bg-white px-3 py-1.5 text-xs font-semibold text-[#006A4E] transition hover:bg-[#006A4E]/5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#006A4E]/20 bg-white px-3 py-1.5 text-xs font-semibold text-[#006A4E] transition duration-200 hover:-translate-y-0.5 hover:bg-[#006A4E]/5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
             >
               Main menu
             </button>
@@ -1803,7 +2057,7 @@ export default function Chatbot() {
             type="button"
             onClick={handleShowMainMenu}
             disabled={isLoading}
-            className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#00543E] disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
           >
             Main menu
           </button>
@@ -1814,7 +2068,7 @@ export default function Chatbot() {
 
   const renderTypingIndicator = () => (
     <div
-      className="flex items-center gap-2"
+      className="animate-ebl-message-in flex items-center gap-2"
       aria-label="Eastern Bank PLC AI Assistant is typing"
       aria-live="polite"
     >
@@ -1834,22 +2088,150 @@ export default function Chatbot() {
       message.role === "bot" ? index : latestIndex,
     -1,
   );
+  const panelAnimationClass =
+    viewTransitionDirection === "forward"
+      ? "animate-ebl-panel-forward-in"
+      : "animate-ebl-panel-back-in";
 
   return (
     <>
+      <style jsx global>{`
+        @keyframes ebl-widget-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.985);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes ebl-widget-out {
+          from {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: translateY(10px) scale(0.985);
+          }
+        }
+
+        @keyframes ebl-message-in {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes ebl-panel-forward-in {
+          from {
+            opacity: 0;
+            filter: blur(1px);
+            transform: translateX(14px);
+          }
+          to {
+            opacity: 1;
+            filter: blur(0);
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes ebl-panel-back-in {
+          from {
+            opacity: 0;
+            filter: blur(1px);
+            transform: translateX(-14px);
+          }
+          to {
+            opacity: 1;
+            filter: blur(0);
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes ebl-control-in {
+          from {
+            opacity: 0;
+            transform: scale(0.92);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes ebl-service-in {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-ebl-widget-in {
+          animation: ebl-widget-in 180ms ease-out both;
+        }
+
+        .animate-ebl-widget-out {
+          animation: ebl-widget-out 180ms ease-in both;
+        }
+
+        .animate-ebl-message-in {
+          animation: ebl-message-in 180ms ease-out both;
+        }
+
+        .animate-ebl-panel-forward-in {
+          animation: ebl-panel-forward-in 260ms cubic-bezier(0.22, 1, 0.36, 1)
+            both;
+        }
+
+        .animate-ebl-panel-back-in {
+          animation: ebl-panel-back-in 260ms cubic-bezier(0.22, 1, 0.36, 1)
+            both;
+        }
+
+        .animate-ebl-control-in {
+          animation: ebl-control-in 180ms ease-out both;
+        }
+
+        .animate-ebl-service-in {
+          animation: ebl-service-in 160ms ease-out both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .animate-ebl-widget-in,
+          .animate-ebl-widget-out,
+          .animate-ebl-message-in,
+          .animate-ebl-panel-forward-in,
+          .animate-ebl-panel-back-in,
+          .animate-ebl-control-in,
+          .animate-ebl-service-in {
+            animation: none;
+          }
+        }
+      `}</style>
+
       <button
         type="button"
         title="Chatbot"
         onClick={() => {
-          setIsOpen((current) => {
-            if (current) {
-              setShowEndConfirmation(false);
-            }
+          if (isOpen) {
+            minimizeChatbot();
+            return;
+          }
 
-            return !current;
-          });
+          openChatbot();
         }}
-        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white p-1 text-white shadow-2xl shadow-[#006A4E]/30 ring-1 ring-[#006A4E]/20 transition hover:-translate-y-0.5 hover:shadow-[#006A4E]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#006A4E] sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
+        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white p-1 text-white shadow-2xl shadow-[#006A4E]/30 ring-1 ring-[#006A4E]/20 transition duration-200 hover:-translate-y-0.5 hover:shadow-[#006A4E]/40 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#006A4E] sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
         aria-label={isOpen ? chatbotText.close : chatbotText.open}
       >
         <span className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-[#008A68] to-[#00543E] shadow-inner">
@@ -1862,15 +2244,22 @@ export default function Chatbot() {
         </span>
       </button>
 
-      {isOpen ? (
-        <div className="fixed inset-x-3 bottom-4 z-40 max-w-[calc(100vw-1.5rem)] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[360px] sm:max-w-[360px]">
+      {isOpen || isWidgetClosing ? (
+        <div
+          className={`fixed inset-x-3 bottom-4 z-40 max-w-[calc(100vw-1.5rem)] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[360px] sm:max-w-[360px] ${
+            isWidgetClosing
+              ? "pointer-events-none animate-ebl-widget-out"
+              : "animate-ebl-widget-in"
+          }`}
+          aria-hidden={isWidgetClosing}
+        >
           <div
-            className="relative flex flex-col overflow-hidden rounded-[1.25rem] border border-[#006A4E]/10 bg-white shadow-2xl shadow-black/15"
-            style={
-              hasStartedConversation
-                ? { height: "min(520px, calc(100dvh - 2rem))" }
-                : undefined
-            }
+            className="relative flex flex-col overflow-hidden rounded-[1.25rem] border border-[#006A4E]/10 bg-white shadow-2xl shadow-black/15 transition-[height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{
+              height: hasStartedConversation
+                ? "min(520px, calc(100dvh - 2rem))"
+                : "min(340px, calc(100dvh - 2rem))",
+            }}
           >
             <div className="flex shrink-0 items-center justify-between gap-3 bg-[#006A4E] px-4 py-3 text-white sm:px-5">
               <div className="flex min-w-0 items-center gap-2">
@@ -1889,7 +2278,7 @@ export default function Chatbot() {
                   <button
                     type="button"
                     onClick={handleBackToIntro}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg font-semibold leading-none transition hover:bg-white/20"
+                    className="animate-ebl-control-in inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg font-semibold leading-none ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:bg-white/20 active:scale-[0.96]"
                     aria-label="Back to start"
                     title="Back to start"
                   >
@@ -1899,11 +2288,8 @@ export default function Chatbot() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsOpen(false);
-                    setShowEndConfirmation(false);
-                  }}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
+                  onClick={minimizeChatbot}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 transition duration-200 hover:-translate-y-0.5 hover:bg-white/20 active:scale-[0.96]"
                   aria-label="Minimize chatbot"
                   title="Minimize chatbot"
                 >
@@ -1924,7 +2310,10 @@ export default function Chatbot() {
             </div>
 
             {hasStartedConversation ? (
-              <div className="flex min-h-0 flex-1 flex-col bg-white px-4 py-4 sm:px-5">
+              <div
+                key="conversation-view"
+                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col bg-white px-4 py-4 sm:px-5`}
+              >
                 <div
                   ref={messageListRef}
                   className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
@@ -1941,9 +2330,15 @@ export default function Chatbot() {
                     const isComplaintCellMessage =
                       message.role === "bot" &&
                       message.source === "complaint-cell-agent";
+                    const isHumanSupportBotMessage =
+                      isHumanSupportMessage(message);
 
                     return (
-                      <div key={`${message.role}-${index}`}>
+                      <div
+                        key={`${message.role}-${index}`}
+                        className="animate-ebl-message-in"
+                        style={{ animationDelay: `${Math.min(index, 4) * 18}ms` }}
+                      >
                         {message.role === "bot" ? (
                           <p className="mb-1 ml-1 text-xs font-medium text-[#006A4E]">
                             Eastern Bank PLC
@@ -1956,7 +2351,9 @@ export default function Chatbot() {
                               : "max-w-[88%] rounded-2xl px-4 py-3"
                           } min-w-0 break-words text-sm leading-6 shadow-sm [overflow-wrap:anywhere] ${
                             message.role === "bot"
-                              ? "bg-[#006A4E] text-white"
+                              ? isHumanSupportBotMessage
+                                ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
+                                : "bg-[#006A4E] text-white"
                               : "ml-auto bg-gray-100 text-gray-700"
                           }`}
                         >
@@ -1978,12 +2375,12 @@ export default function Chatbot() {
                                 isMainMenuQuickActionList(
                                   message.quickActions,
                                 )
-                                  ? "mt-3 grid max-w-full grid-cols-2 gap-2"
+                                  ? "animate-ebl-service-in mt-3 grid max-w-full grid-cols-2 gap-2"
                                   : isDistrictQuickActionList(
                                       message.quickActions,
                                     )
-                                    ? "mt-3 grid max-w-[92%] grid-cols-1 gap-2.5"
-                                  : "mt-2 flex max-w-[92%] flex-wrap gap-2"
+                                    ? "animate-ebl-service-in mt-3 grid max-w-[92%] grid-cols-1 gap-2.5"
+                                  : "animate-ebl-service-in mt-2 flex max-w-[92%] flex-wrap gap-2"
                               }
                             >
                               {(message.quickActions ?? []).map(
@@ -2008,16 +2405,22 @@ export default function Chatbot() {
                     type="text"
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
-                    placeholder={chatbotText.placeholder}
+                    placeholder={
+                      humanSupportStep === "name"
+                        ? "Enter your name..."
+                        : humanSupportStep === "phone"
+                          ? "Enter your mobile number..."
+                          : chatbotText.placeholder
+                    }
                     aria-label={chatbotText.placeholder}
                     disabled={isLoading}
-                    className="min-w-0 flex-1 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#006A4E] focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-w-0 flex-1 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition duration-200 focus:border-[#006A4E] focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
                   />
 
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#006A4E] text-white shadow-lg shadow-[#006A4E]/20 transition hover:bg-[#00543E] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#006A4E] text-white shadow-lg shadow-[#006A4E]/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
                     aria-label={chatbotText.send}
                   >
                     <SendIcon />
@@ -2025,7 +2428,10 @@ export default function Chatbot() {
                 </form>
               </div>
             ) : (
-              <div className="bg-[#007A5A] px-4 pb-5 pt-6 text-white sm:px-5">
+              <div
+                key="intro-view"
+                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col justify-center bg-[#007A5A] px-4 pb-5 pt-6 text-white sm:px-5`}
+              >
                 <div className="space-y-3">
                   <p className="text-3xl font-bold leading-tight">
                     {chatbotText.introTitle}
@@ -2038,7 +2444,7 @@ export default function Chatbot() {
                 <button
                   type="button"
                   onClick={handleStartConversation}
-                  className="mt-7 flex w-full items-center justify-between rounded-lg bg-white px-4 py-4 text-left text-gray-900 shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:shadow-xl"
+                  className="mt-7 flex w-full items-center justify-between rounded-xl border border-white/70 bg-white px-4 py-4 text-left text-gray-900 shadow-[0_14px_30px_rgba(0,0,0,0.12)] transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(0,0,0,0.16)] active:scale-[0.985]"
                 >
                   <span>
                     <span className="block text-base font-semibold">

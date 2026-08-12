@@ -2,7 +2,7 @@ import sqlite3
 import uuid
 from datetime import datetime
 
-from database import DATABASE_NAME, create_database
+from database import DATABASE_NAME, add_column_if_missing, create_database
 
 
 WAITING_STATUS = "waiting"
@@ -43,6 +43,7 @@ def create_live_chat_database():
             support_session_id TEXT UNIQUE,
             chat_session_id TEXT,
             customer_name TEXT,
+            customer_phone TEXT,
             status TEXT,
             agent_id TEXT,
             created_at TEXT,
@@ -51,6 +52,13 @@ def create_live_chat_database():
             updated_at TEXT
         )
     """)
+
+    add_column_if_missing(
+        cursor,
+        "live_chat_sessions",
+        "customer_phone",
+        "TEXT",
+    )
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS live_chat_messages (
@@ -131,18 +139,44 @@ def get_existing_open_live_chat_session(chat_session_id):
     return session
 
 
-def create_live_chat_session(chat_session_id, customer_name="Customer"):
+def create_live_chat_session(chat_session_id, customer_name="Customer", customer_phone=""):
     create_live_chat_database()
 
+    normalized_customer_name = (customer_name or "Customer").strip() or "Customer"
+    normalized_customer_phone = (customer_phone or "").strip()
     existing_session = get_existing_open_live_chat_session(chat_session_id)
 
     if existing_session:
-        existing_session["is_existing"] = True
-        return existing_session
+        updated_customer_name = normalized_customer_name or existing_session.get("customer_name") or "Customer"
+        updated_customer_phone = (
+            normalized_customer_phone
+            or existing_session.get("customer_phone")
+            or ""
+        )
+
+        connection = get_connection()
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE live_chat_sessions
+            SET customer_name = ?,
+                customer_phone = ?,
+                updated_at = ?
+            WHERE support_session_id = ?
+        """, (
+            updated_customer_name,
+            updated_customer_phone,
+            current_time_string(),
+            existing_session["support_session_id"],
+        ))
+        connection.commit()
+        connection.close()
+
+        updated_session = get_live_chat_session(existing_session["support_session_id"])
+        updated_session["is_existing"] = True
+        return updated_session
 
     now = current_time_string()
     support_session_id = generate_support_session_id()
-    normalized_customer_name = (customer_name or "Customer").strip() or "Customer"
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -152,6 +186,7 @@ def create_live_chat_session(chat_session_id, customer_name="Customer"):
             support_session_id,
             chat_session_id,
             customer_name,
+            customer_phone,
             status,
             agent_id,
             created_at,
@@ -159,11 +194,12 @@ def create_live_chat_session(chat_session_id, customer_name="Customer"):
             ended_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         support_session_id,
         chat_session_id,
         normalized_customer_name,
+        normalized_customer_phone,
         WAITING_STATUS,
         "",
         now,
