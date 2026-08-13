@@ -46,6 +46,52 @@ BRANCH_AREA_PROMPT = (
     "Board Bazar in Gazipur, Fulbarigate in Khulna, "
     "Sonargaon in Narayanganj, Maijdee in Noakhali, or Upashahar in Sylhet."
 )
+BRANCH_AREA_QUICK_ACTIONS = {
+    "Chattogram": [
+        "Agrabad",
+        "Jubilee Road",
+        "O.R. Nizam Road",
+        "Muradpur",
+        "Halishahar",
+        "Khulshi",
+        "Khatungonj",
+        "New Market",
+    ],
+    "Dhaka": [
+        "Gulshan",
+        "Motijheel",
+        "Mirpur",
+        "Dhanmondi",
+        "Uttara",
+        "Banani",
+        "Bashundhara",
+        "Shantinagar",
+    ],
+    "Gazipur": [
+        "Board Bazar",
+        "Mawna",
+        "Mouchak",
+    ],
+    "Khulna": [
+        "Fulbarigate",
+        "Khulna",
+    ],
+    "Narayanganj": [
+        "Bhulta",
+        "Narayangonj",
+        "Ponchoboti",
+        "Sonargaon",
+    ],
+    "Noakhali": [
+        "Chowmuhani",
+        "Maijdee",
+    ],
+    "Sylhet": [
+        "Chouhatta",
+        "Fenchuganj",
+        "Upashahar",
+    ],
+}
 BRANCH_DISTRICT_ALIASES = {
     "bagerhat": "Bagerhat",
     "bagherhat": "Bagerhat",
@@ -357,6 +403,12 @@ def branch_area_prompt(district):
     return f"Please tell me your area, for example {example_area} in {district}."
 
 
+def branch_area_quick_actions(district):
+    district = canonical_branch_district(district)
+
+    return list(BRANCH_AREA_QUICK_ACTIONS.get(district, []))
+
+
 def is_branch_area_prompt(reply):
     if reply == BRANCH_AREA_PROMPT:
         return True
@@ -582,6 +634,26 @@ def get_first_dhaka_branches(limit=5):
     return get_first_branches("Dhaka", limit=limit)
 
 
+def get_single_branch_for_district(district):
+    district = canonical_branch_district(district)
+
+    branches = get_first_branches(district, limit=2)
+
+    if len(branches) != 1:
+        return None
+
+    return branches[0]
+
+
+def build_single_branch_direct_reply(district):
+    branch = get_single_branch_for_district(district)
+
+    if not branch:
+        return ""
+
+    return format_branch_reply([branch], "")
+
+
 def search_branches(query, limit=3):
     ensure_branch_database_ready(auto_scrape=True)
     query_terms = extract_branch_query_terms(query)
@@ -645,7 +717,12 @@ def format_branch_reply(branches, area_query):
         )
 
     area_terms = extract_branch_query_terms(area_query)
-    area_label = " ".join(area_terms).title() if area_terms else "your area"
+    if area_terms:
+        area_label = " ".join(area_terms).title()
+    elif len(branches) == 1:
+        area_label = branch_table_cell(branches[0]["branch_name"]).replace(" Branch", "")
+    else:
+        area_label = "your area"
     branch_districts = sorted({branch["district"] for branch in branches})
 
     if len(branch_districts) == 1:

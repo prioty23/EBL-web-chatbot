@@ -150,6 +150,7 @@ const INTEREST_RATE_MENU_SOURCES = new Set([
 const CARD_INFORMATION_MENU_SOURCES = new Set(["card-router"]);
 const ACCOUNT_MENU_SOURCES = new Set(["account-router"]);
 const LOAN_MENU_SOURCES = new Set(["loan-router"]);
+const BRANCH_LOCATOR_MENU_SOURCES = new Set(["branch-locator-agent"]);
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -1275,6 +1276,21 @@ function isLoanOptionText(text: string, actions?: string[]) {
   );
 }
 
+function isBranchLocatorOptionText(text: string, actions?: string[]) {
+  const normalizedText = text.toLowerCase();
+  const hasBranchDistrictOptions = hasAnyAction(actions, [
+    "Dhaka",
+    "Chattogram",
+    "Sylhet",
+  ]);
+
+  return (
+    hasBranchDistrictOptions ||
+    normalizedText.includes("district branch do you want to locate") ||
+    normalizedText.includes("please tell me your area")
+  );
+}
+
 function isScopedOptionMenuMessage(message: Message | null) {
   if (!message || message.role !== "bot" || !message.quickActions?.length) {
     return false;
@@ -1286,11 +1302,13 @@ function isScopedOptionMenuMessage(message: Message | null) {
     hasMenuSource(message, CARD_INFORMATION_MENU_SOURCES) ||
     hasMenuSource(message, ACCOUNT_MENU_SOURCES) ||
     hasMenuSource(message, LOAN_MENU_SOURCES) ||
+    hasMenuSource(message, BRANCH_LOCATOR_MENU_SOURCES) ||
     isScheduleChargeOptionText(message.text, message.quickActions) ||
     isInterestRateOptionText(message.text, message.quickActions) ||
     isCardInformationOptionText(message.text, message.quickActions) ||
     isAccountOptionText(message.text, message.quickActions) ||
-    isLoanOptionText(message.text, message.quickActions)
+    isLoanOptionText(message.text, message.quickActions) ||
+    isBranchLocatorOptionText(message.text, message.quickActions)
   );
 }
 

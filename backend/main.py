@@ -99,11 +99,14 @@ from branch_database import (
     BRANCH_DISTRICT_MENU_REPLY,
     BRANCH_DISTRICT_QUICK_ACTIONS,
     build_branch_locator_reply,
+    build_single_branch_direct_reply,
+    branch_area_quick_actions,
     branch_area_prompt,
     branch_district_from_query,
     branch_districts_from_query,
     ensure_branch_database_ready,
     extract_branch_query_terms,
+    get_single_branch_for_district,
     is_branch_area_prompt,
 )
 
@@ -3000,12 +3003,17 @@ ACCOUNT_BACK_DOMAINS = {
 LOAN_BACK_DOMAINS = {
     "loan",
 }
+BRANCH_BACK_DOMAINS = {
+    "branch_district",
+    "branch_locator",
+}
 SCOPED_BACK_DOMAINS = (
     SCHEDULE_BACK_DOMAINS
     | INTEREST_BACK_DOMAINS
     | CARD_INFORMATION_BACK_DOMAINS
     | ACCOUNT_BACK_DOMAINS
     | LOAN_BACK_DOMAINS
+    | BRANCH_BACK_DOMAINS
 )
 
 
@@ -3025,6 +3033,9 @@ def scoped_back_family(domain):
     if domain in LOAN_BACK_DOMAINS:
         return "loan"
 
+    if domain in BRANCH_BACK_DOMAINS:
+        return "branch"
+
     return ""
 
 
@@ -3042,6 +3053,8 @@ def source_for_prompt_domain(domain):
         "card_information": "card-router",
         "account": "account-router",
         "loan": "loan-router",
+        "branch_district": "branch-locator-agent",
+        "branch_locator": "branch-locator-agent",
     }.get(domain, "greeting-handler")
 
 
@@ -3094,7 +3107,7 @@ def record_scoped_navigation_prompt(session_id, reply, source, quick_actions):
     if domain not in SCOPED_BACK_DOMAINS:
         return
 
-    if domain in {"schedule_charges", "interest_rate"}:
+    if domain in {"schedule_charges", "interest_rate", "branch_district"}:
         base_state = stack[0] if stack and stack[0]["domain"] == "main_menu" else main_menu_navigation_state()
         SCOPED_NAVIGATION_STACKS[session_id] = [base_state, state]
         return
@@ -7311,6 +7324,9 @@ def build_quick_actions(reply, source):
     if reply == BRANCH_DISTRICT_MENU_REPLY:
         return BRANCH_DISTRICT_QUICK_ACTIONS
 
+    if is_branch_area_prompt(reply):
+        return branch_area_quick_actions(branch_district_from_query(reply))
+
     if reply == LOAN_CATEGORY_QUESTION:
         return LOAN_SEGMENT_QUICK_ACTIONS
 
@@ -8011,16 +8027,59 @@ def chat(request: ChatRequest):
     if is_customer_complaint_request(user_message):
         return build_complaint_create_chat_response(session_id, user_message)
 
+    if is_scoped_back_request(user_message):
+        back_state = build_scoped_back_navigation_state(session_id)
+
+        if back_state:
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=back_state["reply"],
+                source=back_state["source"],
+                status="navigation",
+                skip_scoped_navigation_push=True,
+            )
+
+        if last_reply_was_branch_area_prompt(session_id):
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=BRANCH_DISTRICT_MENU_REPLY,
+                source="branch-locator-agent",
+                status="navigation",
+            )
+
+        if last_reply_was_branch_district_prompt(session_id):
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=get_greeting_reply(),
+                source="greeting-handler",
+                status="navigation",
+            )
+
     if last_reply_was_branch_district_prompt(session_id):
         selected_district = branch_district_from_query(user_message)
 
         if selected_district:
+            single_branch = get_single_branch_for_district(selected_district)
+
+            if single_branch:
+                return save_and_build_response(
+                    session_id=session_id,
+                    user_message=user_message,
+                    reply=build_single_branch_direct_reply(selected_district),
+                    source="branch-locator-agent",
+                    status="answered",
+                )
+
             return save_and_build_response(
                 session_id=session_id,
                 user_message=user_message,
                 reply=branch_area_prompt(selected_district),
                 source="branch-locator-agent",
                 status="answered",
+                quick_actions=branch_area_quick_actions(selected_district),
             )
 
         if branch_query_has_area(user_message):
