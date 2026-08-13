@@ -11,6 +11,8 @@ import sys
 import uuid
 from pathlib import Path
 
+from fastapi import HTTPException
+
 
 BACKEND_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND_DIR))
@@ -83,7 +85,7 @@ def run_live_chat_foundation_test():
 
         assert_true(
             start_response["message"]
-            == "You are now in queue. Please wait for an EBL support agent.",
+            == "An EBL Support Agent will join the chat as soon as possible.",
             "Queue response message is not customer friendly.",
         )
         assert_true(session["chat_session_id"] == chat_session_id, "Chat session ID was not saved.")
@@ -96,6 +98,7 @@ def run_live_chat_foundation_test():
             LiveChatStartRequest(
                 session_id=chat_session_id,
                 customer_name="Test Customer",
+                customer_phone="+8801700000000",
             ),
         )
         assert_true(
@@ -106,6 +109,19 @@ def run_live_chat_foundation_test():
             duplicate_response["session"].get("is_existing") is True,
             "Duplicate open support request was not marked existing.",
         )
+
+        try:
+            main.start_live_chat_session(
+                LiveChatStartRequest(
+                    session_id=f"invalid-live-chat-test-{uuid.uuid4().hex}",
+                    customer_name="Invalid Customer",
+                    customer_phone="1234567890",
+                ),
+            )
+        except HTTPException as error:
+            assert_true(error.status_code == 400, "Invalid phone should return 400.")
+        else:
+            raise AssertionError("Invalid phone number was accepted.")
 
         waiting_response = main.list_waiting_live_chat_sessions(limit=100)
         waiting_ids = {

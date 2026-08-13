@@ -7754,11 +7754,36 @@ def health_check():
     }
 
 
+def normalize_live_chat_phone_number(phone_number):
+    digits = re.sub(r"\D", "", phone_number or "")
+
+    if digits.startswith("00880"):
+        digits = digits[2:]
+
+    if digits.startswith("8801") and len(digits) == 13:
+        digits = "0" + digits[3:]
+
+    if re.fullmatch(r"01[3-9]\d{8}", digits):
+        return digits
+
+    return ""
+
+
 @app.post("/live-chat/sessions")
 def start_live_chat_session(request: LiveChatStartRequest):
     session_id = request.session_id or "default-session"
     customer_name = request.customer_name or "Customer"
-    customer_phone = request.customer_phone or ""
+    customer_phone = normalize_live_chat_phone_number(request.customer_phone)
+
+    if not customer_phone:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Please enter a valid Bangladeshi mobile number, "
+                "for example 017XXXXXXXX or +88017XXXXXXXX."
+            ),
+        )
+
     live_chat_session = create_live_chat_session(
         chat_session_id=session_id,
         customer_name=customer_name,
@@ -7766,7 +7791,7 @@ def start_live_chat_session(request: LiveChatStartRequest):
     )
 
     return {
-        "message": "You are now in queue. Please wait for an EBL support agent.",
+        "message": "An EBL Support Agent will join the chat as soon as possible.",
         "session": live_chat_session,
     }
 

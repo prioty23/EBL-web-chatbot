@@ -31,7 +31,7 @@ type LiveChatApiResponse = {
   session?: LiveChatSession;
 };
 
-type HumanSupportStep = "confirm" | "name" | "phone" | null;
+type HumanSupportStep = "confirm" | "details" | null;
 type ViewTransitionDirection = "forward" | "back";
 
 type SendMessageOptions = {
@@ -75,14 +75,14 @@ const HUMAN_SUPPORT_DECLINE_ACTION = "No";
 const HUMAN_SUPPORT_CONFIRM_MESSAGE =
   "To contact an EBL Support Agent, please click Yes.";
 const HUMAN_SUPPORT_COLLECTION_MESSAGE =
-  "To ensure service quality and for future reference, your chat may be stored or monitored.\n\nBefore transferring you to an EBL Support Agent, we need some of your information.\n\nPlease enter your name.";
-const HUMAN_SUPPORT_PHONE_PROMPT = "Please enter your mobile number.";
+  "To ensure service quality and for future reference, your chat may be stored or monitored.\n\nBefore transferring you to an EBL Support Agent, please provide your name and mobile number.";
+const HUMAN_SUPPORT_NAME_REQUIRED_MESSAGE = "Please enter your name.";
 const HUMAN_SUPPORT_INVALID_PHONE_MESSAGE =
-  "Please enter a valid mobile number.";
+  "Please enter a valid Bangladeshi mobile number, for example 017XXXXXXXX or +88017XXXXXXXX.";
 const HUMAN_SUPPORT_TRANSFER_MESSAGE =
-  "Your chat is being transferred to an EBL Support Agent. Please wait for a while.";
+  "Thanks. We have received your details.";
 const HUMAN_SUPPORT_WAITING_MESSAGE =
-  "You are now in queue. Please wait for an EBL support agent.";
+  "An EBL Support Agent will join the chat as soon as possible.";
 const HUMAN_SUPPORT_MESSAGE_SOURCES = new Set([
   "live-chat-agent",
   "live-chat-support-agent",
@@ -164,6 +164,24 @@ function wait(milliseconds: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, milliseconds);
   });
+}
+
+function normalizeBangladeshMobileNumber(phoneNumber: string) {
+  let digits = phoneNumber.replace(/\D/g, "");
+
+  if (digits.startsWith("00880")) {
+    digits = digits.slice(2);
+  }
+
+  if (digits.startsWith("8801") && digits.length === 13) {
+    digits = `0${digits.slice(3)}`;
+  }
+
+  if (/^01[3-9]\d{8}$/.test(digits)) {
+    return digits;
+  }
+
+  return "";
 }
 
 function SendIcon({ className = "h-5 w-5" }: { className?: string }) {
@@ -1324,6 +1342,8 @@ export default function Chatbot() {
   const [humanSupportStep, setHumanSupportStep] =
     useState<HumanSupportStep>(null);
   const [humanSupportName, setHumanSupportName] = useState("");
+  const [humanSupportPhone, setHumanSupportPhone] = useState("");
+  const [humanSupportFormError, setHumanSupportFormError] = useState("");
 
   const [messages, setMessages] = useState<Message[]>([]);
 
@@ -1427,6 +1447,8 @@ export default function Chatbot() {
     setShowEndConfirmation(false);
     setHumanSupportStep(null);
     setHumanSupportName("");
+    setHumanSupportPhone("");
+    setHumanSupportFormError("");
   };
 
   const handleStartConversation = () => {
@@ -1442,12 +1464,16 @@ export default function Chatbot() {
     setShowEndConfirmation(false);
     setHumanSupportStep(null);
     setHumanSupportName("");
+    setHumanSupportPhone("");
+    setHumanSupportFormError("");
   };
 
   const handleShowMainMenu = () => {
     setShowEndConfirmation(false);
     setHumanSupportStep(null);
     setHumanSupportName("");
+    setHumanSupportPhone("");
+    setHumanSupportFormError("");
     setMessages((currentMessages) => [
       ...currentMessages,
       {
@@ -1575,6 +1601,8 @@ export default function Chatbot() {
     setShowEndConfirmation(false);
     setHumanSupportStep("confirm");
     setHumanSupportName("");
+    setHumanSupportPhone("");
+    setHumanSupportFormError("");
     setMessages(chatWithUserMessage);
     setInput("");
     setIsLoading(true);
@@ -1614,7 +1642,8 @@ export default function Chatbot() {
 
     await minimumResponseDelay;
 
-    setHumanSupportStep("name");
+    setHumanSupportStep("details");
+    setHumanSupportFormError("");
     setMessages([
       ...chatWithUserMessage,
       {
@@ -1639,6 +1668,8 @@ export default function Chatbot() {
     setShowEndConfirmation(false);
     setHumanSupportStep(null);
     setHumanSupportName("");
+    setHumanSupportPhone("");
+    setHumanSupportFormError("");
     setMessages(chatWithUserMessage);
     setInput("");
     setIsLoading(true);
@@ -1659,66 +1690,44 @@ export default function Chatbot() {
     setIsLoading(false);
   };
 
-  const handleHumanSupportInput = async (message: string) => {
-    const userMessage = message.trim();
+  const handleHumanSupportFormSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
 
-    if (!userMessage || isLoading || !humanSupportStep) {
+    if (isLoading || humanSupportStep !== "details") {
+      return;
+    }
+
+    const customerName = humanSupportName.trim();
+    const normalizedPhoneNumber =
+      normalizeBangladeshMobileNumber(humanSupportPhone);
+
+    if (!customerName) {
+      setHumanSupportFormError(HUMAN_SUPPORT_NAME_REQUIRED_MESSAGE);
+      return;
+    }
+
+    if (!normalizedPhoneNumber) {
+      setHumanSupportFormError(HUMAN_SUPPORT_INVALID_PHONE_MESSAGE);
       return;
     }
 
     const chatWithUserMessage: Message[] = [
       ...messages,
-      { role: "user", text: userMessage },
+      { role: "user", text: "Support details submitted" },
     ];
+    const currentSessionId = getCurrentSessionId();
 
     setHasStartedConversation(true);
     setShowEndConfirmation(false);
+    setHumanSupportStep(null);
+    setHumanSupportFormError("");
     setMessages(chatWithUserMessage);
     setInput("");
     setIsLoading(true);
 
     const minimumResponseDelay = wait(BOT_RESPONSE_DELAY_MS);
-
-    if (humanSupportStep === "name") {
-      await minimumResponseDelay;
-
-      setHumanSupportName(userMessage);
-      setHumanSupportStep("phone");
-      setMessages([
-        ...chatWithUserMessage,
-        {
-          role: "bot",
-          text: HUMAN_SUPPORT_PHONE_PROMPT,
-          source: "live-chat-agent",
-        },
-      ]);
-      setIsLoading(false);
-      return;
-    }
-
-    if (humanSupportStep !== "phone") {
-      setIsLoading(false);
-      return;
-    }
-
-    const phoneDigits = userMessage.replace(/\D/g, "");
-
-    if (phoneDigits.length < 10 || phoneDigits.length > 15) {
-      await minimumResponseDelay;
-
-      setMessages([
-        ...chatWithUserMessage,
-        {
-          role: "bot",
-          text: HUMAN_SUPPORT_INVALID_PHONE_MESSAGE,
-          source: "live-chat-agent",
-        },
-      ]);
-      setIsLoading(false);
-      return;
-    }
-
-    const currentSessionId = getCurrentSessionId();
 
     try {
       const response = await fetch(LIVE_CHAT_SESSION_API_URL, {
@@ -1728,8 +1737,8 @@ export default function Chatbot() {
         },
         body: JSON.stringify({
           session_id: currentSessionId,
-          customer_name: humanSupportName || "Customer",
-          customer_phone: userMessage,
+          customer_name: customerName,
+          customer_phone: normalizedPhoneNumber,
         }),
       });
 
@@ -1756,12 +1765,14 @@ export default function Chatbot() {
 
       await minimumResponseDelay;
 
-      setHumanSupportStep(null);
       setHumanSupportName("");
+      setHumanSupportPhone("");
       setMessages([...chatWithUserMessage, waitingMessage]);
     } catch {
       await minimumResponseDelay;
 
+      setHumanSupportName("");
+      setHumanSupportPhone("");
       setMessages([
         ...chatWithUserMessage,
         {
@@ -1779,7 +1790,6 @@ export default function Chatbot() {
     event.preventDefault();
 
     if (humanSupportStep) {
-      await handleHumanSupportInput(input);
       return;
     }
 
@@ -2022,6 +2032,76 @@ export default function Chatbot() {
           </span>
         ) : null}
       </div>
+    );
+  };
+
+  const renderHumanSupportDetailsForm = (
+    message: Message,
+    messageIndex: number,
+  ) => {
+    if (
+      humanSupportStep !== "details" ||
+      messageIndex !== latestBotMessageIndex ||
+      !isHumanSupportMessage(message)
+    ) {
+      return null;
+    }
+
+    return (
+      <form
+        onSubmit={handleHumanSupportFormSubmit}
+        className="animate-ebl-service-in mt-3 w-full max-w-[92%] rounded-2xl border border-[#C8D8DD] bg-white p-3.5 shadow-sm"
+      >
+        <div className="space-y-3">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold text-[#223A42]">
+              Name
+            </span>
+            <input
+              type="text"
+              value={humanSupportName}
+              onChange={(event) => {
+                setHumanSupportName(event.target.value);
+                setHumanSupportFormError("");
+              }}
+              disabled={isLoading}
+              placeholder="Enter your full name"
+              className="w-full rounded-xl border border-[#C8D8DD] bg-[#F8FBFC] px-3 py-2.5 text-sm text-[#223A42] outline-none transition duration-200 placeholder:text-slate-400 focus:border-[#006A4E] focus:bg-white focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold text-[#223A42]">
+              Mobile Number
+            </span>
+            <input
+              type="tel"
+              value={humanSupportPhone}
+              onChange={(event) => {
+                setHumanSupportPhone(event.target.value);
+                setHumanSupportFormError("");
+              }}
+              disabled={isLoading}
+              placeholder="017XXXXXXXX"
+              className="w-full rounded-xl border border-[#C8D8DD] bg-[#F8FBFC] px-3 py-2.5 text-sm text-[#223A42] outline-none transition duration-200 placeholder:text-slate-400 focus:border-[#006A4E] focus:bg-white focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </label>
+
+          {humanSupportFormError ? (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium leading-5 text-red-700">
+              {humanSupportFormError}
+            </p>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="inline-flex w-full items-center justify-center rounded-xl bg-[#006A4E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+          >
+            Continue to Support
+          </button>
+        </div>
+      </form>
     );
   };
 
@@ -2379,6 +2459,7 @@ export default function Chatbot() {
                             ? renderComplaintCellContent(message.text)
                             : renderMessageContent(message.text)}
                         </div>
+                        {renderHumanSupportDetailsForm(message, index)}
                         {renderFeedbackControls(message, index)}
                         {renderConversationFollowUp(message, index)}
                         {shouldShowQuickActions ? (
@@ -2424,20 +2505,18 @@ export default function Chatbot() {
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
                     placeholder={
-                      humanSupportStep === "name"
-                        ? "Enter your name..."
-                        : humanSupportStep === "phone"
-                          ? "Enter your mobile number..."
-                          : chatbotText.placeholder
+                      humanSupportStep === "details"
+                        ? "Complete the support form above..."
+                        : chatbotText.placeholder
                     }
                     aria-label={chatbotText.placeholder}
-                    disabled={isLoading}
+                    disabled={isLoading || humanSupportStep === "details"}
                     className="min-w-0 flex-1 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition duration-200 focus:border-[#006A4E] focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
                   />
 
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || humanSupportStep === "details"}
                     className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#006A4E] text-white shadow-lg shadow-[#006A4E]/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
                     aria-label={chatbotText.send}
                   >
