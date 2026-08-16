@@ -43,3 +43,7 @@ class LiveChatMessageRequest(BaseModel):
 
 class LiveChatEndRequest(BaseModel):
     ended_by: Optional[str] = None
+
+
+class LiveChatFeedbackRequest(BaseModel):
+    feedback: str

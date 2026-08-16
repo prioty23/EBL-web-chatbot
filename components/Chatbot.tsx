@@ -10,6 +10,7 @@ type Message = {
   source?: string;
   quickActions?: string[];
   chatId?: number;
+  liveChatSupportSessionId?: string;
   feedback?: FeedbackValue;
   feedbackStatus?: FeedbackStatus;
 };
@@ -29,6 +30,18 @@ type LiveChatSession = {
 type LiveChatApiResponse = {
   message?: string;
   session?: LiveChatSession;
+};
+
+type LiveChatMessage = {
+  id: number;
+  sender_type: "agent" | "customer" | "system";
+  message: string;
+  created_at?: string;
+};
+
+type LiveChatMessagesApiResponse = {
+  session?: LiveChatSession;
+  messages?: LiveChatMessage[];
 };
 
 type HumanSupportStep = "confirm" | "details" | null;
@@ -83,11 +96,14 @@ const HUMAN_SUPPORT_TRANSFER_MESSAGE =
   "Thanks. We have received your details.";
 const HUMAN_SUPPORT_WAITING_MESSAGE =
   "An EBL Support Agent will join the chat as soon as possible.";
+const HUMAN_SUPPORT_SEND_ERROR_MESSAGE =
+  "Sorry, I could not send your message to the support agent. Please try again.";
 const HUMAN_SUPPORT_MESSAGE_SOURCES = new Set([
   "live-chat-agent",
   "live-chat-support-agent",
 ]);
 const LIVE_CHAT_SESSION_STORAGE_KEY = "eastern_ai_live_chat_session_id";
+const LIVE_CHAT_MESSAGE_POLL_MS = 2500;
 const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
@@ -124,6 +140,38 @@ const DISTRICT_QUICK_ACTIONS = [
   "Rangpur",
   "Sylhet",
   "Tangail",
+];
+const BRANCH_AREA_QUICK_ACTIONS = [
+  "Agrabad",
+  "Banani",
+  "Bashundhara",
+  "Bhulta",
+  "Board Bazar",
+  "Chouhatta",
+  "Chowmuhani",
+  "Dhanmondi",
+  "Fenchuganj",
+  "Fulbarigate",
+  "Gulshan",
+  "Halishahar",
+  "Jubilee Road",
+  "Khatungonj",
+  "Khulna",
+  "Khulshi",
+  "Maijdee",
+  "Mawna",
+  "Mirpur",
+  "Motijheel",
+  "Mouchak",
+  "Muradpur",
+  "Narayangonj",
+  "New Market",
+  "O.R. Nizam Road",
+  "Ponchoboti",
+  "Shantinagar",
+  "Sonargaon",
+  "Upashahar",
+  "Uttara",
 ];
 const SCOPED_BACK_MESSAGE = "Back";
 const COMPLAINT_CELL_DEFAULT_EMAIL = "ccs.cmc@ebl-bd.com";
@@ -1086,6 +1134,15 @@ function isHumanSupportMessage(message: Message) {
   );
 }
 
+function isHumanSupportEndedMessage(message: Message) {
+  const normalizedText = message.text.trim().toLowerCase();
+
+  return (
+    isHumanSupportMessage(message) &&
+    normalizedText.startsWith("live chat session ended")
+  );
+}
+
 function shouldShowConversationFollowUp(
   message: Message,
   messageIndex: number,
@@ -1166,6 +1223,16 @@ function isDistrictQuickAction(action: string) {
   );
 }
 
+function isBranchAreaQuickAction(action: string) {
+  return BRANCH_AREA_QUICK_ACTIONS.some(
+    (area) => area.toLowerCase() === action.toLowerCase(),
+  );
+}
+
+function isLocationQuickAction(action: string) {
+  return isDistrictQuickAction(action) || isBranchAreaQuickAction(action);
+}
+
 function isMainMenuQuickActionList(actions: string[] | undefined) {
   if (!actions?.length) {
     return false;
@@ -1179,7 +1246,7 @@ function isDistrictQuickActionList(actions: string[] | undefined) {
     return false;
   }
 
-  return actions.every(isDistrictQuickAction);
+  return actions.every(isLocationQuickAction);
 }
 
 function hasMenuSource(message: Message, sources: Set<string>) {
@@ -1344,11 +1411,14 @@ export default function Chatbot() {
   const [humanSupportName, setHumanSupportName] = useState("");
   const [humanSupportPhone, setHumanSupportPhone] = useState("");
   const [humanSupportFormError, setHumanSupportFormError] = useState("");
+  const [liveChatSupportSessionId, setLiveChatSupportSessionId] = useState("");
+  const [liveChatStatus, setLiveChatStatus] = useState("");
 
   const [messages, setMessages] = useState<Message[]>([]);
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const liveChatLastMessageIdRef = useRef(0);
   const widgetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -1385,6 +1455,105 @@ export default function Chatbot() {
     messages.length,
     showEndConfirmation,
   ]);
+
+  useEffect(() => {
+    const restoreLiveChatTimer = window.setTimeout(() => {
+      const savedSupportSessionId = localStorage.getItem(
+        LIVE_CHAT_SESSION_STORAGE_KEY,
+      );
+
+      if (savedSupportSessionId) {
+        setLiveChatSupportSessionId(savedSupportSessionId);
+        setLiveChatStatus("waiting");
+      }
+    }, 0);
+
+    return () => window.clearTimeout(restoreLiveChatTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!liveChatSupportSessionId) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const pollLiveChatMessages = async () => {
+      try {
+        const response = await fetch(
+          `${LIVE_CHAT_SESSION_API_URL}/${encodeURIComponent(
+            liveChatSupportSessionId,
+          )}/messages?after_id=${liveChatLastMessageIdRef.current}&limit=50`,
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as LiveChatMessagesApiResponse;
+
+        if (isCancelled) {
+          return;
+        }
+
+        const incomingMessages = data.messages ?? [];
+        const newestMessageId = incomingMessages.reduce(
+          (latestMessageId, liveChatMessage) =>
+            Math.max(latestMessageId, liveChatMessage.id),
+          liveChatLastMessageIdRef.current,
+        );
+        const botMessages: Message[] = incomingMessages
+          .filter(
+            (liveChatMessage) =>
+              liveChatMessage.sender_type === "agent" ||
+              liveChatMessage.sender_type === "system",
+          )
+          .map((liveChatMessage) => ({
+            role: "bot",
+            text: liveChatMessage.message,
+            source: "live-chat-agent",
+            liveChatSupportSessionId,
+          }));
+
+        if (newestMessageId > liveChatLastMessageIdRef.current) {
+          liveChatLastMessageIdRef.current = newestMessageId;
+        }
+
+        if (botMessages.length > 0) {
+          setMessages((currentMessages) => [
+            ...currentMessages,
+            ...botMessages,
+          ]);
+        }
+
+        const nextStatus = data.session?.status ?? "";
+
+        if (nextStatus) {
+          setLiveChatStatus(nextStatus);
+        }
+
+        if (nextStatus === "ended") {
+          localStorage.removeItem(LIVE_CHAT_SESSION_STORAGE_KEY);
+          setLiveChatSupportSessionId("");
+        }
+      } catch {
+        // Keep polling quietly; support chat should not interrupt normal chatbot use.
+      }
+    };
+
+    const initialPollTimer = window.setTimeout(() => {
+      void pollLiveChatMessages();
+    }, 0);
+    const pollTimer = window.setInterval(() => {
+      void pollLiveChatMessages();
+    }, LIVE_CHAT_MESSAGE_POLL_MS);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(initialPollTimer);
+      window.clearInterval(pollTimer);
+    };
+  }, [liveChatSupportSessionId]);
 
   useEffect(() => {
     return () => {
@@ -1438,8 +1607,25 @@ export default function Chatbot() {
 
   const handleConfirmEndSession = () => {
     const newSessionId = createSessionId();
+    const supportSessionToEnd = liveChatSupportSessionId;
 
     localStorage.setItem(SESSION_STORAGE_KEY, newSessionId);
+    localStorage.removeItem(LIVE_CHAT_SESSION_STORAGE_KEY);
+
+    if (supportSessionToEnd) {
+      void fetch(
+        `${LIVE_CHAT_SESSION_API_URL}/${encodeURIComponent(
+          supportSessionToEnd,
+        )}/end`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ended_by: "customer" }),
+        },
+      );
+    }
 
     setMessages([]);
     setInput("");
@@ -1449,6 +1635,9 @@ export default function Chatbot() {
     setHumanSupportName("");
     setHumanSupportPhone("");
     setHumanSupportFormError("");
+    setLiveChatSupportSessionId("");
+    setLiveChatStatus("");
+    liveChatLastMessageIdRef.current = 0;
   };
 
   const handleStartConversation = () => {
@@ -1584,6 +1773,56 @@ export default function Chatbot() {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const sendLiveChatCustomerMessage = async (message: string) => {
+    const userMessage = message.trim();
+
+    if (!userMessage || isLoading || !liveChatSupportSessionId) {
+      return;
+    }
+
+    const chatWithUserMessage: Message[] = [
+      ...messages,
+      { role: "user", text: userMessage },
+    ];
+
+    setHasStartedConversation(true);
+    setShowEndConfirmation(false);
+    setMessages(chatWithUserMessage);
+    setInput("");
+
+    try {
+      const response = await fetch(
+        `${LIVE_CHAT_SESSION_API_URL}/${encodeURIComponent(
+          liveChatSupportSessionId,
+        )}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sender_type: "customer",
+            sender_id: getCurrentSessionId(),
+            message: userMessage,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Live chat message request failed");
+      }
+    } catch {
+      setMessages([
+        ...chatWithUserMessage,
+        {
+          role: "bot",
+          text: HUMAN_SUPPORT_SEND_ERROR_MESSAGE,
+          source: "live-chat-agent",
+        },
+      ]);
     }
   };
 
@@ -1754,6 +1993,7 @@ export default function Chatbot() {
           data.message ?? HUMAN_SUPPORT_WAITING_MESSAGE
         }`,
         source: "live-chat-agent",
+        liveChatSupportSessionId: supportSessionId,
       };
 
       if (supportSessionId) {
@@ -1761,6 +2001,9 @@ export default function Chatbot() {
           LIVE_CHAT_SESSION_STORAGE_KEY,
           supportSessionId,
         );
+        liveChatLastMessageIdRef.current = 0;
+        setLiveChatSupportSessionId(supportSessionId);
+        setLiveChatStatus(data.session?.status ?? "waiting");
       }
 
       await minimumResponseDelay;
@@ -1790,6 +2033,11 @@ export default function Chatbot() {
     event.preventDefault();
 
     if (humanSupportStep) {
+      return;
+    }
+
+    if (liveChatSupportSessionId && liveChatStatus !== "ended") {
+      await sendLiveChatCustomerMessage(input);
       return;
     }
 
@@ -1843,6 +2091,73 @@ export default function Chatbot() {
 
       if (!response.ok) {
         throw new Error("Feedback request failed");
+      }
+
+      setMessages((currentMessages) =>
+        currentMessages.map((currentMessage, index) =>
+          index === messageIndex
+            ? {
+                ...currentMessage,
+                feedback,
+                feedbackStatus: "saved",
+              }
+            : currentMessage,
+        ),
+      );
+    } catch {
+      setMessages((currentMessages) =>
+        currentMessages.map((currentMessage, index) =>
+          index === messageIndex
+            ? {
+                ...currentMessage,
+                feedbackStatus: "error",
+              }
+            : currentMessage,
+        ),
+      );
+    }
+  };
+
+  const handleLiveChatFeedback = async (
+    messageIndex: number,
+    feedback: FeedbackValue,
+  ) => {
+    const message = messages[messageIndex];
+    const supportSessionId =
+      message?.liveChatSupportSessionId || liveChatSupportSessionId;
+
+    if (message?.role !== "bot" || !supportSessionId) {
+      return;
+    }
+
+    setMessages((currentMessages) =>
+      currentMessages.map((currentMessage, index) =>
+        index === messageIndex
+          ? {
+              ...currentMessage,
+              feedback,
+              feedbackStatus: "saving",
+            }
+          : currentMessage,
+      ),
+    );
+
+    try {
+      const response = await fetch(
+        `${LIVE_CHAT_SESSION_API_URL}/${encodeURIComponent(
+          supportSessionId,
+        )}/feedback`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ feedback }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Live chat feedback request failed");
       }
 
       setMessages((currentMessages) =>
@@ -1962,21 +2277,32 @@ export default function Chatbot() {
         ) : null}
       </div>
       <div className="divide-y divide-gray-200">
-        {actions.map((action) => (
-          <button
-            key={action}
-            type="button"
-            onClick={() => {
-              void sendMessage(action);
-            }}
-            disabled={isLoading}
-            className="block w-full min-w-0 px-4 py-3 text-center text-sm font-medium text-[#006A4E] transition duration-200 hover:bg-[#006A4E]/5 active:bg-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="block min-w-0 break-words [overflow-wrap:anywhere]">
-              {action}
-            </span>
-          </button>
-        ))}
+        {actions.map((action) => {
+          const isLocationAction = isLocationQuickAction(action);
+
+          return (
+            <button
+              key={action}
+              type="button"
+              onClick={() => {
+                void sendMessage(action);
+              }}
+              disabled={isLoading}
+              className={`flex w-full min-w-0 items-center px-4 py-3 text-sm font-medium text-[#006A4E] transition duration-200 hover:bg-[#006A4E]/5 active:bg-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60 ${
+                isLocationAction ? "justify-start gap-3 text-left" : "justify-center text-center"
+              }`}
+            >
+              {isLocationAction ? (
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#006A4E]">
+                  <DistrictPinIcon className="h-4 w-4" />
+                </span>
+              ) : null}
+              <span className="block min-w-0 break-words [overflow-wrap:anywhere]">
+                {action}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -2031,6 +2357,70 @@ export default function Chatbot() {
             Could not save
           </span>
         ) : null}
+      </div>
+    );
+  };
+
+  const renderLiveChatEndedControls = (
+    message: Message,
+    messageIndex: number,
+  ) => {
+    if (!isHumanSupportEndedMessage(message)) {
+      return null;
+    }
+
+    const isHelpfulSelected = message.feedback === "helpful";
+    const isNotHelpfulSelected = message.feedback === "not_helpful";
+    const isSaving = message.feedbackStatus === "saving";
+
+    const feedbackButtonClass = (isSelected: boolean) =>
+      `rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        isSelected
+          ? "border-[#006A4E] bg-[#006A4E] text-white"
+          : "border-[#006A4E]/20 bg-white text-[#006A4E] hover:bg-[#006A4E]/5"
+      }`;
+
+    return (
+      <div className="mt-2 flex max-w-[92%] flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-gray-500">
+          Was this helpful?
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            void handleLiveChatFeedback(messageIndex, "helpful");
+          }}
+          disabled={isSaving}
+          className={feedbackButtonClass(isHelpfulSelected)}
+        >
+          Helpful
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void handleLiveChatFeedback(messageIndex, "not_helpful");
+          }}
+          disabled={isSaving}
+          className={feedbackButtonClass(isNotHelpfulSelected)}
+        >
+          Not helpful
+        </button>
+        {message.feedbackStatus === "saved" ? (
+          <span className="text-xs font-medium text-[#006A4E]">Saved</span>
+        ) : null}
+        {message.feedbackStatus === "error" ? (
+          <span className="text-xs font-medium text-red-600">
+            Could not save
+          </span>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleShowMainMenu}
+          disabled={isLoading}
+          className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+        >
+          Main menu
+        </button>
       </div>
     );
   };
@@ -2430,6 +2820,8 @@ export default function Chatbot() {
                       message.source === "complaint-cell-agent";
                     const isHumanSupportBotMessage =
                       isHumanSupportMessage(message);
+                    const isHumanSupportEndedBotMessage =
+                      isHumanSupportEndedMessage(message);
 
                     return (
                       <div
@@ -2449,8 +2841,10 @@ export default function Chatbot() {
                               : "max-w-[88%] rounded-2xl px-4 py-3"
                           } min-w-0 break-words text-sm leading-6 shadow-sm [overflow-wrap:anywhere] ${
                             message.role === "bot"
-                              ? isHumanSupportBotMessage
-                                ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
+                              ? isHumanSupportEndedBotMessage
+                                ? "border border-[#F0C84B] bg-[#FFF8D8] font-semibold text-[#4B3A00]"
+                                : isHumanSupportBotMessage
+                                  ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
                                 : "bg-[#006A4E] text-white"
                               : "ml-auto bg-gray-100 text-gray-700"
                           }`}
@@ -2461,6 +2855,7 @@ export default function Chatbot() {
                         </div>
                         {renderHumanSupportDetailsForm(message, index)}
                         {renderFeedbackControls(message, index)}
+                        {renderLiveChatEndedControls(message, index)}
                         {renderConversationFollowUp(message, index)}
                         {shouldShowQuickActions ? (
                           shouldRenderServiceActionList(message) ? (

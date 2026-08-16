@@ -23,6 +23,7 @@ from live_chat_database import create_live_chat_database  # noqa: E402
 from schemas import (  # noqa: E402
     LiveChatAcceptRequest,
     LiveChatEndRequest,
+    LiveChatFeedbackRequest,
     LiveChatMessageRequest,
     LiveChatStartRequest,
 )
@@ -146,6 +147,12 @@ def run_live_chat_foundation_test():
             "Agent ID was not saved during accept.",
         )
 
+        active_response = main.get_active_live_chat_support_session()
+        assert_true(
+            active_response["session"]["support_session_id"] == support_session_id,
+            "Active live chat session API did not return the accepted support request.",
+        )
+
         message_response = main.create_live_chat_message(
             support_session_id,
             LiveChatMessageRequest(
@@ -175,6 +182,18 @@ def run_live_chat_foundation_test():
         assert_true(
             end_response["session"]["status"] == "ended",
             "Ended live chat session did not become ended.",
+        )
+        feedback_response = main.submit_live_chat_feedback(
+            support_session_id,
+            LiveChatFeedbackRequest(feedback="helpful"),
+        )
+        assert_true(
+            feedback_response["session"]["feedback"] == "helpful",
+            "Live chat feedback was not saved.",
+        )
+        assert_true(
+            bool(feedback_response["session"]["feedback_at"]),
+            "Live chat feedback timestamp was not saved.",
         )
 
     finally:

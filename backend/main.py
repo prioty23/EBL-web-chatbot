@@ -15,6 +15,7 @@ from schemas import (
     ComplaintStatusUpdateRequest,
     LiveChatAcceptRequest,
     LiveChatEndRequest,
+    LiveChatFeedbackRequest,
     LiveChatMessageRequest,
     LiveChatStartRequest,
 )
@@ -68,9 +69,11 @@ from live_chat_database import (
     create_live_chat_database,
     create_live_chat_session,
     end_live_chat_session,
+    get_active_live_chat_session,
     get_live_chat_messages,
     get_live_chat_session,
     get_waiting_live_chat_sessions,
+    save_live_chat_feedback,
     save_live_chat_message,
 )
 
@@ -7803,6 +7806,13 @@ def list_waiting_live_chat_sessions(limit: int = 20):
     }
 
 
+@app.get("/live-chat/sessions/active")
+def get_active_live_chat_support_session():
+    return {
+        "session": get_active_live_chat_session(),
+    }
+
+
 @app.get("/live-chat/sessions/{support_session_id}")
 def get_live_chat_session_details(support_session_id: str):
     live_chat_session = get_live_chat_session(support_session_id)
@@ -7936,6 +7946,37 @@ def end_live_chat_support_session(
 
     return {
         "message": "Live chat session ended.",
+        "session": result["session"],
+    }
+
+
+@app.post("/live-chat/sessions/{support_session_id}/feedback")
+def submit_live_chat_feedback(
+    support_session_id: str,
+    request: LiveChatFeedbackRequest,
+):
+    feedback = normalize_chat_feedback(request.feedback)
+
+    if not feedback:
+        raise HTTPException(
+            status_code=400,
+            detail="Feedback must be helpful or not_helpful.",
+        )
+
+    result = save_live_chat_feedback(
+        support_session_id=support_session_id,
+        feedback=feedback,
+    )
+
+    if result["reason"] == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail="Live chat session not found.",
+        )
+
+    return {
+        "message": "Feedback saved",
+        "feedback": feedback,
         "session": result["session"],
     }
 

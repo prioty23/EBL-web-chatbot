@@ -1,7 +1,4 @@
-import Chatbot from "@/components/Chatbot";
-import Footer from "@/components/Footer";
-import Header from "@/components/Header";
-import { LanguageProvider } from "@/components/LanguageProvider";
+import AppShell from "@/components/AppShell";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -18,12 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
-        <LanguageProvider>
-          <Header />
-          <div className="flex-1">{children}</div>
-          <Chatbot />
-          <Footer />
-        </LanguageProvider>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

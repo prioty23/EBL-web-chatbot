@@ -49,6 +49,8 @@ def create_live_chat_database():
             created_at TEXT,
             accepted_at TEXT,
             ended_at TEXT,
+            feedback TEXT,
+            feedback_at TEXT,
             updated_at TEXT
         )
     """)
@@ -57,6 +59,18 @@ def create_live_chat_database():
         cursor,
         "live_chat_sessions",
         "customer_phone",
+        "TEXT",
+    )
+    add_column_if_missing(
+        cursor,
+        "live_chat_sessions",
+        "feedback",
+        "TEXT",
+    )
+    add_column_if_missing(
+        cursor,
+        "live_chat_sessions",
+        "feedback_at",
         "TEXT",
     )
 
@@ -192,9 +206,11 @@ def create_live_chat_session(chat_session_id, customer_name="Customer", customer
             created_at,
             accepted_at,
             ended_at,
+            feedback,
+            feedback_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         support_session_id,
         chat_session_id,
@@ -203,6 +219,8 @@ def create_live_chat_session(chat_session_id, customer_name="Customer", customer
         WAITING_STATUS,
         "",
         now,
+        "",
+        "",
         "",
         "",
         now,
@@ -438,6 +456,55 @@ def get_live_chat_messages(support_session_id, after_id=0, limit=100):
     connection.close()
 
     return messages
+
+
+def save_live_chat_feedback(support_session_id, feedback):
+    create_live_chat_database()
+
+    session = get_live_chat_session(support_session_id)
+
+    if not session:
+        return {
+            "saved": False,
+            "reason": "not_found",
+            "session": None,
+        }
+
+    normalized_feedback = (feedback or "").strip().lower()
+
+    if normalized_feedback not in ["helpful", "not_helpful"]:
+        return {
+            "saved": False,
+            "reason": "invalid_feedback",
+            "session": session,
+        }
+
+    now = current_time_string()
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        UPDATE live_chat_sessions
+        SET feedback = ?,
+            feedback_at = ?,
+            updated_at = ?
+        WHERE support_session_id = ?
+    """, (
+        normalized_feedback,
+        now,
+        now,
+        support_session_id,
+    ))
+
+    connection.commit()
+    connection.close()
+
+    return {
+        "saved": True,
+        "reason": "saved",
+        "session": get_live_chat_session(support_session_id),
+    }
 
 
 def end_live_chat_session(support_session_id, ended_by="agent"):
