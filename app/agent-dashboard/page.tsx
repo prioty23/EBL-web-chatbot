@@ -783,7 +783,7 @@ export default function AgentDashboardPage() {
                   <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[linear-gradient(180deg,#F8FBFA_0%,#FFFFFF_100%)] px-4 py-5">
                     {messages.length === 0 ? (
                       <div className="mx-auto mt-16 max-w-md rounded-[8px] border border-dashed border-[#D1DFDB] bg-white px-5 py-8 text-center text-sm leading-6 text-[#667570] shadow-sm">
-                        No messages yet. Accept the chat and wait for the customer message, or send the first support greeting.
+                        No messages yet. Accept the chat and wait for the customer message or send the first support greeting.
                       </div>
                     ) : (
                       messages.map((chatMessage, index) => {
@@ -858,7 +858,7 @@ export default function AgentDashboardPage() {
                     </div>
                     <h2 className="mt-4 text-xl font-bold text-[#10231D]">Select a customer</h2>
                     <p className="mt-2 text-sm leading-6 text-[#667570]">
-                      Choose a waiting customer from the queue to view details, accept the chat, and start replying.
+                      Choose a waiting customer from the queue to view details, accept the chat and start replying.
                     </p>
                   </div>
                 </div>
