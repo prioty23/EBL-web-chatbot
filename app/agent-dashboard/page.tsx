@@ -1,12 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import type { FormEvent } from "react";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
-const AGENT_ID = "ebl-support-agent";
-const AGENT_NAME = "EBL Support Agent";
+const AGENT_STORAGE_KEY = "ebl_live_chat_agent";
 
 type LiveChatSession = {
   id: number;
@@ -44,6 +44,13 @@ type SessionResponse = {
 type MessagesResponse = {
   session: LiveChatSession;
   messages: LiveChatMessage[];
+};
+
+type AgentProfile = {
+  agent_id: string;
+  name: string;
+  email: string;
+  is_active: boolean;
 };
 
 type IconProps = {
@@ -132,7 +139,7 @@ function getStatusStyle(status: string) {
   const normalizedStatus = status.toLowerCase();
 
   if (normalizedStatus === "active") {
-    return "border-[#BFE8D5] bg-[#E8F8F0] text-[#006A4E]";
+    return "border-[#B9D9EF] bg-[#EAF4FB] text-[#005B96]";
   }
 
   if (normalizedStatus === "ended") {
@@ -212,19 +219,6 @@ function UserIcon({ className = "" }: IconProps) {
   );
 }
 
-function PhoneIcon({ className = "" }: IconProps) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M8.5 5.5 10 8.8a1.5 1.5 0 0 1-.3 1.7l-.9.9a10.5 10.5 0 0 0 3.8 3.8l.9-.9a1.5 1.5 0 0 1 1.7-.3l3.3 1.5a1.4 1.4 0 0 1 .8 1.6l-.5 2.2A1.7 1.7 0 0 1 17.1 21 14.1 14.1 0 0 1 3 6.9a1.7 1.7 0 0 1 1.3-1.7l2.2-.5a1.4 1.4 0 0 1 2 1Z"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
 function ClockIcon({ className = "" }: IconProps) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -265,58 +259,183 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function MetricCard({
-  icon,
-  label,
-  value,
-  helper,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  helper: string;
-}) {
+function CustomerDetailsSummary({ session }: { session: LiveChatSession | null }) {
   return (
-    <div className="agent-dashboard-card rounded-[8px] border border-[#DCE8E4] bg-white px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F8F0] text-[#006A4E]">
-          {icon}
+    <section className="agent-dashboard-card rounded-[8px] border border-[#DCE8E4] bg-white px-4 py-3 shadow-sm">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF4FB] text-[#005B96]">
+          <UserIcon className="h-5 w-5" />
         </span>
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-[#667570]">{label}</p>
-          <p className="mt-0.5 truncate text-xl font-bold text-[#10231D]">{value}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-[#667570]">Customer Details</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2">
+            <p className="truncate text-xl font-bold text-[#10231D]">
+              {session?.customer_name || "-"}
+            </p>
+            {session ? <StatusBadge status={session.status} /> : null}
+          </div>
         </div>
       </div>
-      <p className="mt-3 text-xs leading-5 text-[#667570]">{helper}</p>
-    </div>
+
+      {session ? (
+        <div className="mt-3 grid gap-3 text-xs leading-5 text-[#667570] sm:grid-cols-2">
+          <div className="min-w-0 space-y-1.5">
+            <p className="grid min-w-0 grid-cols-[78px_minmax(0,1fr)] gap-2">
+              <span className="font-semibold text-[#20332D]">Phone:</span>
+              <span className="break-words [overflow-wrap:anywhere]">
+                {session.customer_phone || "Not available"}
+              </span>
+            </p>
+            <p className="grid min-w-0 grid-cols-[78px_minmax(0,1fr)] gap-2">
+              <span className="font-semibold text-[#20332D]">Requested:</span>
+              <span>{formatTime(session.created_at)}</span>
+            </p>
+          </div>
+          <div className="min-w-0 space-y-1.5">
+            <p className="grid min-w-0 grid-cols-[78px_minmax(0,1fr)] gap-2">
+              <span className="font-semibold text-[#20332D]">Accepted:</span>
+              <span>{formatTime(session.accepted_at)}</span>
+            </p>
+            <p className="grid min-w-0 grid-cols-[78px_minmax(0,1fr)] gap-2">
+              <span className="font-semibold text-[#20332D]">Ended at:</span>
+              <span>{formatTime(session.ended_at)}</span>
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs leading-5 text-[#667570]">
+          Choose a customer from the queue to see details here.
+        </p>
+      )}
+    </section>
   );
 }
 
-function DetailRow({
-  icon,
-  label,
-  value,
+function ActiveChatSummary({ session }: { session: LiveChatSession | null }) {
+  return (
+    <section className="agent-dashboard-card rounded-[8px] border border-[#DCE8E4] bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF4FB] text-[#005B96]">
+          <ChatIcon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-[#667570]">Active Chat</p>
+          <p className="mt-0.5 truncate text-xl font-bold text-[#10231D]">
+            {session ? "1" : "0"}
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 truncate text-xs leading-5 text-[#667570]">
+        {session
+          ? `${session.customer_name || "Customer"} / ${session.customer_phone || "No phone"}`
+          : "No active conversation."}
+      </p>
+    </section>
+  );
+}
+
+function AgentWorkBar({
+  agentName,
+  agentEmail,
+  agentId,
+  isAvailable,
+  onToggleAvailability,
+  onLogout,
 }: {
-  icon: ReactNode;
-  label: string;
-  value: string;
+  agentName: string;
+  agentEmail: string;
+  agentId: string;
+  isAvailable: boolean;
+  onToggleAvailability: () => void;
+  onLogout: () => void;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-3 border-b border-[#EEF2F1] py-3 last:border-b-0">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F7F5] text-[#006A4E]">
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#7C8A86]">{label}</p>
-        <p className="mt-1 break-words text-sm font-semibold leading-5 text-[#20332D] [overflow-wrap:anywhere]">
-          {value || "Not available"}
+    <section className="agent-dashboard-card flex min-h-[560px] flex-1 flex-col overflow-hidden rounded-[8px] border border-[#D6E5E0] bg-white shadow-sm">
+      <div className="border-b border-[#E5EFEC] bg-[linear-gradient(180deg,#F8FBFA_0%,#FFFFFF_100%)] px-5 py-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7C8A86]">
+          Agent Information
         </p>
+        <div className="mt-4 flex min-w-0 flex-col items-center text-center">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#DDEFFB] text-[#005B96] ring-1 ring-[#005B96]/10">
+            <UserIcon className="h-8 w-8" />
+          </span>
+          <div className="mt-3 min-w-0">
+            <p className="truncate text-lg font-bold text-[#10231D]">{agentName}</p>
+            <p className="mt-1 break-words text-sm font-medium text-[#667570] [overflow-wrap:anywhere]">
+              {agentEmail || "Support agent"}
+            </p>
+            <p
+              className={classNames(
+                "mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold",
+                isAvailable ? "text-[#005B96]" : "text-[#667570]",
+                isAvailable ? "border-[#B9D9EF] bg-[#EAF4FB]" : "border-[#D9DFE2] bg-[#F3F6F7]",
+              )}
+            >
+              <span
+                className={classNames(
+                  "h-2 w-2 rounded-full",
+                  isAvailable ? "bg-[#14B86A]" : "bg-[#BAC7C2]",
+                )}
+              />
+              {isAvailable ? "Online" : "Offline"}
+            </p>
+          </div>
+        </div>
       </div>
-    </div>
+
+      <div className="flex flex-1 flex-col px-5 py-4 text-sm">
+        <div className="space-y-3">
+          <div className="rounded-[8px] border border-[#E5EFEC] bg-[#F8FBFA] px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#7C8A86]">Agent ID</p>
+            <p className="mt-1 break-words text-sm font-bold text-[#10231D] [overflow-wrap:anywhere]">
+              {agentId || "Not available"}
+            </p>
+          </div>
+          <div className="rounded-[8px] border border-[#E5EFEC] bg-white px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#7C8A86]">Availability</p>
+            <p className="mt-1 text-sm font-semibold leading-5 text-[#20332D]">
+              {isAvailable ? "Ready to accept customer chats." : "Not accepting new chats right now."}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-auto space-y-3 pt-6">
+          <button
+            type="button"
+            onClick={onToggleAvailability}
+            className={classNames(
+              "flex min-h-11 w-full items-center justify-between rounded-full border px-4 text-sm font-bold transition duration-200 active:scale-[0.98]",
+              isAvailable
+                ? "border-[#B9D9EF] bg-[#EAF4FB] text-[#004A7C] hover:bg-[#DCEFFB]"
+                : "border-[#D9DFE2] bg-[#F3F6F7] text-[#4B5B60] hover:bg-[#E9EFF1]",
+            )}
+            aria-pressed={isAvailable}
+          >
+            <span>{isAvailable ? "Online" : "Offline"}</span>
+            <span
+              className={classNames(
+                "h-2.5 w-2.5 rounded-full",
+                isAvailable ? "bg-[#14B86A]" : "bg-[#BAC7C2]",
+              )}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex min-h-11 w-full items-center justify-center rounded-full border border-[#D8B229] bg-[#F4C430] px-4 text-sm font-bold text-[#302500] shadow-sm shadow-[#B78C00]/10 transition duration-200 hover:bg-[#E9B600] active:scale-[0.98]"
+          >
+            Log out
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
 export default function AgentDashboardPage() {
+  const router = useRouter();
+  const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [waitingSessions, setWaitingSessions] = useState<LiveChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<LiveChatSession | null>(null);
   const [selectedSession, setSelectedSession] = useState<LiveChatSession | null>(null);
@@ -330,21 +449,44 @@ export default function AgentDashboardPage() {
 
   const selectedSessionId = selectedSession?.support_session_id || "";
   const canSendMessage = selectedSession?.status === "active" && draftMessage.trim().length > 0;
+  const currentAgentId = agentProfile?.agent_id || "";
+  const currentAgentName = agentProfile?.name || "";
+  const currentAgentEmail = agentProfile?.email || "";
 
-  const queueSummary = useMemo(() => {
-    if (activeSession) {
-      return "One active support chat is in progress.";
-    }
+  const customerForSummary = selectedSession || activeSession;
 
-    if (waitingSessions.length === 0) {
-      return "No customer is waiting right now.";
-    }
+  useEffect(() => {
+    const authCheckTimer = window.setTimeout(() => {
+      const storedAgent = window.localStorage.getItem(AGENT_STORAGE_KEY);
 
-    return `${waitingSessions.length} customer${waitingSessions.length > 1 ? "s are" : " is"} waiting.`;
-  }, [activeSession, waitingSessions.length]);
+      if (!storedAgent) {
+        setIsCheckingAuth(false);
+        router.replace("/agent-login");
+        return;
+      }
 
-  const selectedCustomerName = selectedSession?.customer_name || "No customer selected";
-  const hasActiveChat = Boolean(activeSession);
+      try {
+        const parsedAgent = JSON.parse(storedAgent) as AgentProfile;
+
+        if (!parsedAgent?.agent_id || !parsedAgent?.name) {
+          window.localStorage.removeItem(AGENT_STORAGE_KEY);
+          router.replace("/agent-login");
+          return;
+        }
+
+        setAgentProfile(parsedAgent);
+      } catch {
+        window.localStorage.removeItem(AGENT_STORAGE_KEY);
+        router.replace("/agent-login");
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(authCheckTimer);
+    };
+  }, [router]);
 
   const loadMessages = useCallback(async (supportSessionId: string) => {
     const data = await readApi<MessagesResponse>(
@@ -378,6 +520,10 @@ export default function AgentDashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (isCheckingAuth || !agentProfile) {
+      return;
+    }
+
     const initialRefreshTimer = window.setTimeout(() => {
       void refreshDashboard();
     }, 0);
@@ -390,7 +536,7 @@ export default function AgentDashboardPage() {
       window.clearTimeout(initialRefreshTimer);
       window.clearInterval(refreshTimer);
     };
-  }, [refreshDashboard]);
+  }, [agentProfile, isCheckingAuth, refreshDashboard]);
 
   useEffect(() => {
     if (!selectedSessionId) {
@@ -424,18 +570,23 @@ export default function AgentDashboardPage() {
       return;
     }
 
+    if (!currentAgentId) {
+      setError("Please sign in again before accepting a customer chat.");
+      router.replace("/agent-login");
+      return;
+    }
+
     try {
       const data = await readApi<SessionResponse>(
         `/live-chat/sessions/${encodeURIComponent(session.support_session_id)}/accept`,
         {
           method: "POST",
-          body: JSON.stringify({ agent_id: AGENT_ID }),
+          body: JSON.stringify({ agent_id: currentAgentId }),
         },
       );
 
       setActiveSession(data.session);
       setSelectedSession(data.session);
-      setNotice("Chat accepted. You can now reply to the customer.");
       await refreshDashboard();
     } catch (currentError) {
       setError(currentError instanceof Error ? currentError.message : "Unable to accept chat.");
@@ -446,6 +597,12 @@ export default function AgentDashboardPage() {
     event.preventDefault();
 
     if (!selectedSession || !canSendMessage) {
+      return;
+    }
+
+    if (!currentAgentId) {
+      setError("Please sign in again before sending a message.");
+      router.replace("/agent-login");
       return;
     }
 
@@ -460,7 +617,7 @@ export default function AgentDashboardPage() {
           method: "POST",
           body: JSON.stringify({
             sender_type: "agent",
-            sender_id: AGENT_ID,
+            sender_id: currentAgentId,
             message: nextMessage,
           }),
         },
@@ -480,6 +637,12 @@ export default function AgentDashboardPage() {
       return;
     }
 
+    if (!currentAgentId) {
+      setError("Please sign in again before ending a chat.");
+      router.replace("/agent-login");
+      return;
+    }
+
     setError("");
     setNotice("");
 
@@ -488,17 +651,54 @@ export default function AgentDashboardPage() {
         `/live-chat/sessions/${encodeURIComponent(selectedSession.support_session_id)}/end`,
         {
           method: "POST",
-          body: JSON.stringify({ ended_by: AGENT_ID }),
+          body: JSON.stringify({ ended_by: currentAgentId }),
         },
       );
 
       setSelectedSession(data.session);
       setActiveSession(null);
-      setNotice("Chat session ended.");
       await refreshDashboard();
     } catch (currentError) {
       setError(currentError instanceof Error ? currentError.message : "Unable to end chat.");
     }
+  }
+
+  function handleAgentLogout() {
+    setNotice("");
+
+    if (activeSession) {
+      setError("Please end the active chat before logging out.");
+      return;
+    }
+
+    window.localStorage.removeItem(AGENT_STORAGE_KEY);
+    setAgentProfile(null);
+    setWaitingSessions([]);
+    setSelectedSession(null);
+    setMessages([]);
+    router.replace("/agent-login");
+  }
+
+  if (isCheckingAuth || !agentProfile) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F4F7F6] px-4 text-[#10231D]">
+        <div className="w-full max-w-sm rounded-[8px] border border-[#DCE8E4] bg-white p-6 text-center shadow-sm">
+          <div className="mx-auto h-12 w-12 overflow-hidden">
+            <Image
+              src="/ebl-logo.png"
+              alt="Eastern Bank PLC logo"
+              width={1216}
+              height={1477}
+              priority
+              className="h-12 w-12 object-cover object-top"
+            />
+          </div>
+          <p className="mt-4 text-sm font-semibold text-[#005B96]">
+            Checking agent access...
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -560,7 +760,7 @@ export default function AgentDashboardPage() {
       `}</style>
 
       <main className="min-h-screen bg-[#F4F7F6] text-[#10231D]">
-        <header className="bg-gradient-to-r from-[#00543E] via-[#006A4E] to-[#004E3A] px-4 py-3 text-white shadow-lg shadow-[#006A4E]/20 sm:px-6 lg:px-8">
+        <header className="bg-gradient-to-r from-[#004A7C] via-[#005B96] to-[#003F68] px-4 py-3 text-white shadow-lg shadow-[#005B96]/20 sm:px-6 lg:px-8">
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden">
@@ -574,7 +774,7 @@ export default function AgentDashboardPage() {
                 />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#DCEFFB]">
                   Eastern Bank PLC.
                 </p>
                 <h1 className="mt-0.5 text-xl font-bold leading-tight sm:text-2xl">
@@ -583,61 +783,10 @@ export default function AgentDashboardPage() {
               </div>
             </div>
 
-            <div className="w-full rounded-[8px] border border-white/15 bg-white/[0.08] px-4 py-2 text-sm shadow-sm backdrop-blur lg:w-[330px]">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-emerald-50/75">Signed in as</p>
-                  <p className="mt-0.5 truncate text-sm font-bold text-white">{AGENT_NAME}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAgentAvailable((currentValue) => !currentValue)}
-                  className={classNames(
-                    "inline-flex min-h-8 shrink-0 items-center gap-2 rounded-full border px-3 text-xs font-bold transition duration-200 active:scale-[0.98]",
-                    isAgentAvailable
-                      ? "border-[#76E6A6]/45 bg-[#E8F8F0] text-[#00543E] hover:bg-white"
-                      : "border-white/20 bg-white/10 text-emerald-50 hover:bg-white/15",
-                  )}
-                  aria-pressed={isAgentAvailable}
-                >
-                  <span
-                    className={classNames(
-                      "h-2.5 w-2.5 rounded-full",
-                      isAgentAvailable ? "bg-[#14B86A]" : "bg-[#BAC7C2]",
-                    )}
-                  />
-                  {isAgentAvailable ? "Online" : "Offline"}
-                </button>
-              </div>
-              <p className="mt-2 text-xs font-medium text-emerald-50/75">
-                {isAgentAvailable ? "Ready to accept customer chats." : "Not accepting new chats right now."}
-              </p>
-            </div>
           </div>
         </header>
 
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-          <section className="grid gap-3 sm:grid-cols-3">
-            <MetricCard
-              icon={<QueueIcon className="h-5 w-5" />}
-              label="Waiting Queue"
-              value={String(waitingSessions.length)}
-              helper={queueSummary}
-            />
-            <MetricCard
-              icon={<ChatIcon className="h-5 w-5" />}
-              label="Active Chat"
-              value={hasActiveChat ? "1" : "0"}
-              helper={hasActiveChat ? "One customer is connected." : "No active conversation."}
-            />
-            <MetricCard
-              icon={<UserIcon className="h-5 w-5" />}
-              label="Selected Customer"
-              value={selectedSession ? selectedCustomerName : "-"}
-              helper={selectedSession ? `Status: ${selectedSession.status}` : "Choose a customer to begin."}
-            />
-          </section>
-
           {(error || notice) && (
             <section
               className={classNames(
@@ -651,105 +800,108 @@ export default function AgentDashboardPage() {
             </section>
           )}
 
-          <section className="grid min-h-[680px] gap-5 xl:grid-cols-[330px_minmax(0,1fr)_320px]">
-            <aside className="agent-dashboard-card flex min-h-[520px] flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-[#E5EFEC] bg-white px-5 py-4">
-                <div className="min-w-0">
-                  <h2 className="text-base font-bold text-[#10231D]">Queue</h2>
-                  <p className="mt-1 text-xs text-[#667570]">Oldest requests appear first.</p>
-                </div>
-                <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[#006A4E] px-2 text-sm font-bold text-white">
-                  {waitingSessions.length}
-                </span>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                {isLoading ? (
-                  <p className="rounded-[8px] border border-dashed border-[#D1DFDB] bg-[#F8FBFA] px-4 py-6 text-sm text-[#667570]">
-                    Loading support queue...
-                  </p>
-                ) : waitingSessions.length === 0 ? (
-                  <div className="rounded-[8px] border border-dashed border-[#D1DFDB] bg-[#F8FBFA] px-4 py-8 text-center text-sm leading-6 text-[#667570]">
-                    No waiting customer right now.
+          <section className="grid min-h-[600px] gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="flex min-w-0 flex-col gap-5">
+              <section className="grid min-h-[600px] gap-5 lg:grid-cols-[330px_minmax(0,1fr)]">
+                <div className="flex min-h-[600px] flex-col gap-5">
+                  <ActiveChatSummary session={activeSession} />
+                  <aside className="agent-dashboard-card flex min-h-[460px] flex-1 flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-[#E5EFEC] bg-white px-5 py-4">
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-[#10231D]">Queue</h2>
+                    </div>
+                    <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[#005B96] px-2 text-sm font-bold text-white">
+                      {waitingSessions.length}
+                    </span>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {waitingSessions.map((session, index) => {
-                      const isSelected = selectedSessionId === session.support_session_id;
 
-                      return (
-                        <div
-                          key={session.support_session_id}
-                          className={classNames(
-                            "group relative w-full rounded-[8px] border p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-[#006A4E]/70 hover:bg-[#F5FBF8] hover:shadow-md",
-                            isSelected
-                              ? "border-[#006A4E] bg-[#EFFAF5] shadow-sm"
-                              : "border-[#E2ECE9] bg-white",
-                            index === 0 ? "agent-new-session" : "",
-                          )}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMessages([]);
-                              setSelectedSession(session);
-                            }}
-                            className="block w-full text-left"
-                          >
-                            <div className="flex min-w-0 items-start gap-3">
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#DDEFE8] text-sm font-bold text-[#006A4E] ring-1 ring-[#006A4E]/10">
-                                {getInitials(session.customer_name)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex min-w-0 items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-bold text-[#10231D]">
-                                      {session.customer_name || "Customer"}
-                                    </p>
-                                    <p className="mt-1 break-words text-xs font-medium text-[#667570]">
-                                      {session.customer_phone || "No phone"}
-                                    </p>
-                                  </div>
-                                  <span className="rounded-full bg-[#FFF8D8] px-2.5 py-1 text-[11px] font-bold text-[#6F5200]">
-                                    New
-                                  </span>
-                                </div>
-
-                                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#667570]">
-                                  <ClockIcon className="h-3.5 w-3.5" />
-                                  <span>{formatWaitTime(session.created_at)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void acceptSession(session);
-                            }}
-                            disabled={!isAgentAvailable}
-                            className="ml-[60px] mt-4 inline-flex min-h-9 items-center justify-center rounded-full bg-[#006A4E] px-4 text-xs font-bold text-white shadow-sm transition duration-200 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9FB8B0] disabled:hover:bg-[#9FB8B0]"
-                          >
-                            Accept
-                          </button>
+                  <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                    {isLoading ? (
+                      <div className="rounded-[8px] border border-[#E2ECE9] bg-[#F8FBFA] px-4 py-6 text-sm text-[#667570]">
+                        Loading support queue...
+                      </div>
+                    ) : waitingSessions.length === 0 ? (
+                      <div className="rounded-[8px] border border-[#E2ECE9] bg-[linear-gradient(180deg,#F8FBFA_0%,#FFFFFF_100%)] px-4 py-8 text-center shadow-sm">
+                        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#EAF4FB] text-[#005B96]">
+                          <QueueIcon className="h-5 w-5" />
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </aside>
+                        <p className="mt-4 text-sm font-bold text-[#10231D]">
+                          Queue is clear
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-[#667570]">
+                          New customer support requests will appear here.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {waitingSessions.map((session, index) => {
+                          const isSelected = selectedSessionId === session.support_session_id;
 
-            <section className="agent-dashboard-card flex min-h-[620px] min-w-0 flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
+                          return (
+                            <div
+                              key={session.support_session_id}
+                              className={classNames(
+                                "group relative w-full rounded-[8px] border p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-[#005B96]/70 hover:bg-[#F3F9FD] hover:shadow-md",
+                                isSelected
+                                  ? "border-[#005B96] bg-[#EAF4FB] shadow-sm"
+                                  : "border-[#E2ECE9] bg-white",
+                                index === 0 ? "agent-new-session" : "",
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMessages([]);
+                                  setSelectedSession(session);
+                                }}
+                                className="block w-full text-left"
+                              >
+                                <div className="flex min-w-0 items-start gap-3">
+                                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#DDEFFB] text-sm font-bold text-[#005B96] ring-1 ring-[#005B96]/10">
+                                    {getInitials(session.customer_name)}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex min-w-0 items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-bold text-[#10231D]">
+                                          {session.customer_name || "Customer"}
+                                        </p>
+                                        <p className="mt-1 break-words text-xs font-medium text-[#667570]">
+                                          {session.customer_phone || "No phone"}
+                                        </p>
+                                      </div>
+                                      <span className="rounded-full bg-[#FFF8D8] px-2.5 py-1 text-[11px] font-bold text-[#6F5200]">
+                                        New
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#667570]">
+                                      <ClockIcon className="h-3.5 w-3.5" />
+                                      <span>{formatWaitTime(session.created_at)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  </aside>
+                </div>
+
+                <div className="flex min-h-[600px] min-w-0 flex-col gap-5">
+                  <CustomerDetailsSummary session={customerForSummary} />
+                  <section className="agent-dashboard-card flex min-h-[460px] min-w-0 flex-1 flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
               {selectedSession ? (
                 <>
                   <div className="flex flex-col gap-4 border-b border-[#E5EFEC] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-[#006A4E]" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#005B96]" />
                         <h2 className="text-base font-bold text-[#10231D]">Active Chat</h2>
-                        <StatusBadge status={selectedSession.status} />
                       </div>
                       <p className="mt-1 truncate text-sm font-medium text-[#667570]">
                         {selectedSession.customer_name || "Customer"} / {selectedSession.customer_phone || "No phone"}
@@ -762,7 +914,7 @@ export default function AgentDashboardPage() {
                             type="button"
                             onClick={() => void acceptSession(selectedSession)}
                             disabled={!isAgentAvailable}
-                            className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#006A4E] px-4 text-sm font-bold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9FB8B0] disabled:hover:translate-y-0 disabled:hover:bg-[#9FB8B0]"
+                            className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#005B96] px-4 text-sm font-bold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#004A7C] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9FB8B0] disabled:hover:translate-y-0 disabled:hover:bg-[#9FB8B0]"
                           >
                             Accept Chat
                           </button>
@@ -782,8 +934,10 @@ export default function AgentDashboardPage() {
 
                   <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[linear-gradient(180deg,#F8FBFA_0%,#FFFFFF_100%)] px-4 py-5">
                     {messages.length === 0 ? (
-                      <div className="mx-auto mt-16 max-w-md rounded-[8px] border border-dashed border-[#D1DFDB] bg-white px-5 py-8 text-center text-sm leading-6 text-[#667570] shadow-sm">
-                        No messages yet. Accept the chat and wait for the customer message or send the first support greeting.
+                      <div className="mx-auto mt-10 max-w-md rounded-[8px] border border-dashed border-[#D1DFDB] bg-white px-5 py-8 text-center text-sm leading-6 text-[#667570] shadow-sm">
+                        {selectedSession.status === "active"
+                          ? "Chat accepted. You can now reply."
+                          : "No messages yet. Accept the chat before replying."}
                       </div>
                     ) : (
                       messages.map((chatMessage, index) => {
@@ -805,7 +959,7 @@ export default function AgentDashboardPage() {
                                 isSystem
                                   ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
                                   : isAgent
-                                    ? "bg-[#006A4E] text-white"
+                                    ? "bg-[#005B96] text-white"
                                     : "border border-[#E2ECE9] bg-white text-[#20332D]",
                               )}
                             >
@@ -837,12 +991,12 @@ export default function AgentDashboardPage() {
                             ? "Type your message..."
                             : "Accept the chat before replying"
                         }
-                        className="min-h-12 flex-1 rounded-full border border-[#C9D7D3] bg-white px-4 text-sm text-[#20332D] outline-none transition duration-200 placeholder:text-[#8A9894] focus:border-[#006A4E] focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:bg-[#F2F5F4] disabled:text-[#7C8A86]"
+                        className="min-h-12 flex-1 rounded-full border border-[#C9D7D3] bg-white px-4 text-sm text-[#20332D] outline-none transition duration-200 placeholder:text-[#8A9894] focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10 disabled:cursor-not-allowed disabled:bg-[#F2F5F4] disabled:text-[#7C8A86]"
                       />
                       <button
                         type="submit"
                         disabled={!canSendMessage || isSending}
-                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#006A4E] px-6 text-sm font-bold text-white shadow-md shadow-[#006A4E]/15 transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9FB8B0] disabled:shadow-none disabled:hover:translate-y-0 disabled:active:scale-100"
+                        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#005B96] px-6 text-sm font-bold text-white shadow-md shadow-[#005B96]/15 transition duration-200 hover:-translate-y-0.5 hover:bg-[#004A7C] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9FB8B0] disabled:shadow-none disabled:hover:translate-y-0 disabled:active:scale-100"
                       >
                         <SendIcon className="h-4 w-4" />
                         {isSending ? "Sending..." : "Send"}
@@ -851,89 +1005,37 @@ export default function AgentDashboardPage() {
                   </form>
                 </>
               ) : (
-                <div className="flex flex-1 items-center justify-center p-6">
-                  <div className="max-w-md text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#E8F8F0] text-[#006A4E]">
+                <div className="flex flex-1 items-center justify-center bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FBFA_100%)] p-6">
+                  <div className="w-full max-w-md rounded-[8px] border border-[#E2ECE9] bg-white p-6 text-center shadow-sm">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#EAF4FB] text-[#005B96] ring-1 ring-[#005B96]/10">
                       <ChatIcon className="h-7 w-7" />
                     </div>
-                    <h2 className="mt-4 text-xl font-bold text-[#10231D]">Select a customer</h2>
+                    <h2 className="mt-4 text-xl font-bold text-[#10231D]">Ready for support</h2>
                     <p className="mt-2 text-sm leading-6 text-[#667570]">
-                      Choose a waiting customer from the queue to view details, accept the chat and start replying.
+                      Select a waiting customer to review details, accept the chat and start replying.
                     </p>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <aside className="agent-dashboard-card flex min-h-[520px] flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
-              <div className="border-b border-[#E5EFEC] bg-white px-5 py-4">
-                <h2 className="text-base font-bold text-[#10231D]">Customer Details</h2>
-                <p className="mt-1 text-xs text-[#667570]">Session information for the selected chat.</p>
-              </div>
-
-              {selectedSession ? (
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="border-b border-[#EEF2F1] px-5 py-5">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#DDEFE8] text-lg font-bold text-[#006A4E] ring-1 ring-[#006A4E]/10">
-                        <UserIcon className="h-8 w-8" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-lg font-bold text-[#10231D]">
-                          {selectedSession.customer_name || "Customer"}
-                        </p>
-                        <div className="mt-2">
-                          <StatusBadge status={selectedSession.status} />
-                        </div>
-                      </div>
+                    <div className="mt-5 grid gap-2 text-left text-xs font-semibold text-[#4B5B60] sm:grid-cols-3">
+                      <span className="rounded-full bg-[#F1F7F5] px-3 py-2 text-center">Review</span>
+                      <span className="rounded-full bg-[#F1F7F5] px-3 py-2 text-center">Accept</span>
+                      <span className="rounded-full bg-[#F1F7F5] px-3 py-2 text-center">Reply</span>
                     </div>
                   </div>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2">
-                    <DetailRow
-                      icon={<PhoneIcon className="h-4 w-4" />}
-                      label="Mobile Number"
-                      value={selectedSession.customer_phone}
-                    />
-                    <DetailRow
-                      icon={<ClockIcon className="h-4 w-4" />}
-                      label="Requested At"
-                      value={formatTime(selectedSession.created_at)}
-                    />
-                    <DetailRow
-                      icon={<ChatIcon className="h-4 w-4" />}
-                      label="Accepted At"
-                      value={formatTime(selectedSession.accepted_at)}
-                    />
-                    <DetailRow
-                      icon={<PowerIcon className="h-4 w-4" />}
-                      label="Ended At"
-                      value={formatTime(selectedSession.ended_at)}
-                    />
-                    <DetailRow
-                      icon={<UserIcon className="h-4 w-4" />}
-                      label="Agent ID"
-                      value={selectedSession.agent_id || AGENT_ID}
-                    />
-                    <DetailRow
-                      icon={<QueueIcon className="h-4 w-4" />}
-                      label="Session ID"
-                      value={selectedSession.support_session_id}
-                    />
-                    {selectedSession.feedback ? (
-                      <DetailRow
-                        icon={<ChatIcon className="h-4 w-4" />}
-                        label="Customer Feedback"
-                        value={selectedSession.feedback.replace("_", " ")}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-1 items-center justify-center px-5 py-8 text-center text-sm leading-6 text-[#667570]">
-                  Customer details will appear after selecting a queue item.
                 </div>
               )}
+                  </section>
+                </div>
+              </section>
+            </div>
+
+            <aside className="flex min-h-[600px] flex-col">
+              <AgentWorkBar
+                agentName={currentAgentName}
+                agentEmail={currentAgentEmail}
+                agentId={currentAgentId}
+                isAvailable={isAgentAvailable}
+                onToggleAvailability={() => setIsAgentAvailable((currentValue) => !currentValue)}
+                onLogout={handleAgentLogout}
+              />
             </aside>
           </section>
         </div>

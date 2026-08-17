@@ -13,14 +13,14 @@ type AppShellProps = {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const isAgentDashboard = pathname === "/agent-dashboard";
+  const isAgentArea = pathname === "/agent-dashboard" || pathname === "/agent-login";
 
   return (
     <LanguageProvider>
-      {!isAgentDashboard && <Header />}
+      {!isAgentArea && <Header />}
       <div className="flex-1">{children}</div>
-      {!isAgentDashboard && <Chatbot />}
-      {!isAgentDashboard && <Footer />}
+      {!isAgentArea && <Chatbot />}
+      {!isAgentArea && <Footer />}
     </LanguageProvider>
   );
 }

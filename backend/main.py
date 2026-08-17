@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import (
+    AgentLoginRequest,
     ChatRequest,
     ChatFeedbackRequest,
     ChatResponse,
@@ -76,6 +77,8 @@ from live_chat_database import (
     save_live_chat_feedback,
     save_live_chat_message,
 )
+
+from agent_database import create_agent_database, seed_default_agent, verify_agent_login
 
 from website_scraper import get_internal_links_from_website, get_text_from_website
 
@@ -7718,6 +7721,8 @@ def startup_event():
     ensure_lending_rate_database_ready()
     ensure_branch_database_ready()
     create_live_chat_database()
+    create_agent_database()
+    seed_default_agent()
     import_account_types(clear_existing=True)
     ensure_account_types_ready()
     import_loan_types(clear_existing=True)
@@ -7754,6 +7759,27 @@ def health_check():
     return {
         "status": "ok",
         "service": "eastern-bank-plc-chatbot-backend"
+    }
+
+
+@app.post("/agent/login")
+def login_support_agent(request: AgentLoginRequest):
+    seed_default_agent()
+
+    agent = verify_agent_login(
+        email=request.email,
+        password=request.password,
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid agent email or password.",
+        )
+
+    return {
+        "message": "Agent login successful.",
+        "agent": agent,
     }
 
 

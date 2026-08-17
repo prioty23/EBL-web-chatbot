@@ -96,6 +96,8 @@ const HUMAN_SUPPORT_TRANSFER_MESSAGE =
   "Thanks. We have received your details.";
 const HUMAN_SUPPORT_WAITING_MESSAGE =
   "An EBL Support Agent will join the chat as soon as possible.";
+const HUMAN_SUPPORT_BUSY_MESSAGE =
+  "Our EBL support agents are currently busy. Please wait a little longer, or try again later if the matter is not urgent.";
 const HUMAN_SUPPORT_SEND_ERROR_MESSAGE =
   "Sorry, I could not send your message to the support agent. Please try again.";
 const HUMAN_SUPPORT_MESSAGE_SOURCES = new Set([
@@ -104,6 +106,7 @@ const HUMAN_SUPPORT_MESSAGE_SOURCES = new Set([
 ]);
 const LIVE_CHAT_SESSION_STORAGE_KEY = "eastern_ai_live_chat_session_id";
 const LIVE_CHAT_MESSAGE_POLL_MS = 2500;
+const LIVE_CHAT_BUSY_NOTICE_MS = 180000;
 const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
@@ -1419,6 +1422,8 @@ export default function Chatbot() {
   const messageListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const liveChatLastMessageIdRef = useRef(0);
+  const liveChatBusyTimerRef = useRef<number | null>(null);
+  const liveChatBusyNoticeSessionRef = useRef("");
   const widgetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -1556,9 +1561,61 @@ export default function Chatbot() {
   }, [liveChatSupportSessionId]);
 
   useEffect(() => {
+    if (
+      !liveChatSupportSessionId ||
+      liveChatStatus !== "waiting" ||
+      liveChatBusyNoticeSessionRef.current === liveChatSupportSessionId
+    ) {
+      if (liveChatBusyTimerRef.current) {
+        window.clearTimeout(liveChatBusyTimerRef.current);
+        liveChatBusyTimerRef.current = null;
+      }
+      return;
+    }
+
+    liveChatBusyTimerRef.current = window.setTimeout(() => {
+      liveChatBusyNoticeSessionRef.current = liveChatSupportSessionId;
+      liveChatBusyTimerRef.current = null;
+
+      setMessages((currentMessages) => {
+        const hasBusyNotice = currentMessages.some(
+          (message) =>
+            message.liveChatSupportSessionId === liveChatSupportSessionId &&
+            message.text === HUMAN_SUPPORT_BUSY_MESSAGE,
+        );
+
+        if (hasBusyNotice) {
+          return currentMessages;
+        }
+
+        return [
+          ...currentMessages,
+          {
+            role: "bot",
+            text: HUMAN_SUPPORT_BUSY_MESSAGE,
+            source: "live-chat-agent",
+            liveChatSupportSessionId,
+          },
+        ];
+      });
+    }, LIVE_CHAT_BUSY_NOTICE_MS);
+
+    return () => {
+      if (liveChatBusyTimerRef.current) {
+        window.clearTimeout(liveChatBusyTimerRef.current);
+        liveChatBusyTimerRef.current = null;
+      }
+    };
+  }, [liveChatStatus, liveChatSupportSessionId]);
+
+  useEffect(() => {
     return () => {
       if (widgetCloseTimerRef.current) {
         clearTimeout(widgetCloseTimerRef.current);
+      }
+
+      if (liveChatBusyTimerRef.current) {
+        clearTimeout(liveChatBusyTimerRef.current);
       }
     };
   }, []);
@@ -1638,6 +1695,7 @@ export default function Chatbot() {
     setLiveChatSupportSessionId("");
     setLiveChatStatus("");
     liveChatLastMessageIdRef.current = 0;
+    liveChatBusyNoticeSessionRef.current = "";
   };
 
   const handleStartConversation = () => {
@@ -1842,6 +1900,7 @@ export default function Chatbot() {
     setHumanSupportName("");
     setHumanSupportPhone("");
     setHumanSupportFormError("");
+    liveChatBusyNoticeSessionRef.current = "";
     setMessages(chatWithUserMessage);
     setInput("");
     setIsLoading(true);
@@ -2002,6 +2061,7 @@ export default function Chatbot() {
           supportSessionId,
         );
         liveChatLastMessageIdRef.current = 0;
+        liveChatBusyNoticeSessionRef.current = "";
         setLiveChatSupportSessionId(supportSessionId);
         setLiveChatStatus(data.session?.status ?? "waiting");
       }

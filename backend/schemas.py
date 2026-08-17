@@ -47,3 +47,8 @@ class LiveChatEndRequest(BaseModel):
 
 class LiveChatFeedbackRequest(BaseModel):
     feedback: str
+
+
+class AgentLoginRequest(BaseModel):
+    email: str
+    password: str
