@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import (
+    AgentAvailabilityRequest,
     AgentLoginRequest,
     ChatRequest,
     ChatFeedbackRequest,
@@ -78,7 +79,15 @@ from live_chat_database import (
     save_live_chat_message,
 )
 
-from agent_database import create_agent_database, seed_default_agent, verify_agent_login
+from agent_database import (
+    create_agent_database,
+    get_agent_by_id,
+    get_available_agent_count,
+    has_available_agent,
+    seed_default_agent,
+    update_agent_availability,
+    verify_agent_login,
+)
 
 from website_scraper import get_internal_links_from_website, get_text_from_website
 
@@ -250,6 +259,10 @@ from memory_recall import (
 from response_cleaner import clean_bank_contact_information
 
 ERROR_REPLY = "Sorry, I could not process that request right now. Please try again later."
+NO_LIVE_AGENT_REPLY = (
+    "Our EBL support agents are currently unavailable right now. "
+    "Please try again later or use the Complaint Cell option for urgent support."
+)
 SCHEDULE_CHARGES_MENU_REPLY = (
     "Which banking charge do you want to know Retail, SME, Corporate "
     "or Card charges?"
@@ -7777,9 +7790,66 @@ def login_support_agent(request: AgentLoginRequest):
             detail="Invalid agent email or password.",
         )
 
+    agent = update_agent_availability(
+        agent_id=agent["agent_id"],
+        is_available=True,
+    ) or agent
+
     return {
         "message": "Agent login successful.",
         "agent": agent,
+    }
+
+
+@app.get("/agent/{agent_id}")
+def get_support_agent_profile(agent_id: str):
+    agent = get_agent_by_id(agent_id)
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Support agent not found.",
+        )
+
+    return {
+        "agent": agent,
+    }
+
+
+@app.patch("/agent/{agent_id}/availability")
+def update_support_agent_availability(
+    agent_id: str,
+    request: AgentAvailabilityRequest,
+):
+    agent = update_agent_availability(
+        agent_id=agent_id,
+        is_available=request.is_available,
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Support agent not found.",
+        )
+
+    return {
+        "message": "Agent availability updated.",
+        "agent": agent,
+    }
+
+
+@app.get("/live-chat/availability")
+def get_live_chat_availability():
+    available_agent_count = get_available_agent_count()
+
+    return {
+        "has_available_agent": available_agent_count > 0,
+        "available_agent_count": available_agent_count,
+        "message": (
+            "An EBL support agent is available."
+            if available_agent_count > 0
+            else NO_LIVE_AGENT_REPLY
+        ),
     }
 
 
@@ -7811,6 +7881,12 @@ def start_live_chat_session(request: LiveChatStartRequest):
                 "Please enter a valid Bangladeshi mobile number, "
                 "for example 017XXXXXXXX or +88017XXXXXXXX."
             ),
+        )
+
+    if not has_available_agent():
+        raise HTTPException(
+            status_code=503,
+            detail=NO_LIVE_AGENT_REPLY,
         )
 
     live_chat_session = create_live_chat_session(

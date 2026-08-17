@@ -16,8 +16,8 @@ BACKEND_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND_DIR))
 
 import main  # noqa: E402
-from agent_database import DEFAULT_AGENT_EMAIL, DEFAULT_AGENT_PASSWORD, seed_default_agent  # noqa: E402
-from schemas import AgentLoginRequest  # noqa: E402
+from agent_database import DEFAULT_AGENT_EMAIL, DEFAULT_AGENT_ID, DEFAULT_AGENT_PASSWORD, seed_default_agent  # noqa: E402
+from schemas import AgentAvailabilityRequest, AgentLoginRequest  # noqa: E402
 
 
 def assert_true(condition: bool, message: str):
@@ -40,8 +40,36 @@ def run_agent_login_test():
     assert_true(response["message"] == "Agent login successful.", "Login response message changed.")
     assert_true(agent["agent_id"] == "ebl-support-agent", "Default support agent ID is incorrect.")
     assert_true(agent["email"] == DEFAULT_AGENT_EMAIL, "Default support agent email is incorrect.")
+    assert_true(agent["is_available"] is True, "Agent should become available after login.")
     assert_true("password_hash" not in agent, "Password hash must not be returned.")
     assert_true("password_salt" not in agent, "Password salt must not be returned.")
+
+    offline_response = main.update_support_agent_availability(
+        DEFAULT_AGENT_ID,
+        AgentAvailabilityRequest(is_available=False),
+    )
+
+    assert_true(
+        offline_response["agent"]["is_available"] is False,
+        "Agent availability was not saved as offline.",
+    )
+
+    availability_response = main.get_live_chat_availability()
+
+    assert_true(
+        availability_response["has_available_agent"] is False,
+        "Live chat availability should be false when the agent is offline.",
+    )
+
+    online_response = main.update_support_agent_availability(
+        DEFAULT_AGENT_ID,
+        AgentAvailabilityRequest(is_available=True),
+    )
+
+    assert_true(
+        online_response["agent"]["is_available"] is True,
+        "Agent availability was not saved as online.",
+    )
 
     try:
         main.login_support_agent(

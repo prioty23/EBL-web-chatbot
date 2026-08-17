@@ -41,6 +41,10 @@ type SessionResponse = {
   session: LiveChatSession | null;
 };
 
+type AgentResponse = {
+  agent: AgentProfile;
+};
+
 type MessagesResponse = {
   session: LiveChatSession;
   messages: LiveChatMessage[];
@@ -51,6 +55,7 @@ type AgentProfile = {
   name: string;
   email: string;
   is_active: boolean;
+  is_available: boolean;
 };
 
 type IconProps = {
@@ -339,6 +344,7 @@ function AgentWorkBar({
   agentEmail,
   agentId,
   isAvailable,
+  isUpdatingAvailability,
   onToggleAvailability,
   onLogout,
 }: {
@@ -346,8 +352,9 @@ function AgentWorkBar({
   agentEmail: string;
   agentId: string;
   isAvailable: boolean;
-  onToggleAvailability: () => void;
-  onLogout: () => void;
+  isUpdatingAvailability: boolean;
+  onToggleAvailability: () => void | Promise<void>;
+  onLogout: () => void | Promise<void>;
 }) {
   return (
     <section className="agent-dashboard-card flex min-h-[560px] flex-1 flex-col overflow-hidden rounded-[8px] border border-[#D6E5E0] bg-white shadow-sm">
@@ -402,16 +409,19 @@ function AgentWorkBar({
         <div className="mt-auto space-y-3 pt-6">
           <button
             type="button"
-            onClick={onToggleAvailability}
+            onClick={() => void onToggleAvailability()}
+            disabled={isUpdatingAvailability}
             className={classNames(
-              "flex min-h-11 w-full items-center justify-between rounded-full border px-4 text-sm font-bold transition duration-200 active:scale-[0.98]",
+              "flex min-h-11 w-full items-center justify-between rounded-full border px-4 text-sm font-bold transition duration-200 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70",
               isAvailable
                 ? "border-[#B9D9EF] bg-[#EAF4FB] text-[#004A7C] hover:bg-[#DCEFFB]"
                 : "border-[#D9DFE2] bg-[#F3F6F7] text-[#4B5B60] hover:bg-[#E9EFF1]",
             )}
             aria-pressed={isAvailable}
           >
-            <span>{isAvailable ? "Online" : "Offline"}</span>
+            <span>
+              {isUpdatingAvailability ? "Updating..." : isAvailable ? "Online" : "Offline"}
+            </span>
             <span
               className={classNames(
                 "h-2.5 w-2.5 rounded-full",
@@ -421,7 +431,7 @@ function AgentWorkBar({
           </button>
           <button
             type="button"
-            onClick={onLogout}
+            onClick={() => void onLogout()}
             className="flex min-h-11 w-full items-center justify-center rounded-full border border-[#D8B229] bg-[#F4C430] px-4 text-sm font-bold text-[#302500] shadow-sm shadow-[#B78C00]/10 transition duration-200 hover:bg-[#E9B600] active:scale-[0.98]"
           >
             Log out
@@ -444,6 +454,7 @@ export default function AgentDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isAgentAvailable, setIsAgentAvailable] = useState(true);
+  const [isAvailabilityUpdating, setIsAvailabilityUpdating] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -475,6 +486,7 @@ export default function AgentDashboardPage() {
         }
 
         setAgentProfile(parsedAgent);
+        setIsAgentAvailable(parsedAgent.is_available !== false);
       } catch {
         window.localStorage.removeItem(AGENT_STORAGE_KEY);
         router.replace("/agent-login");
@@ -663,12 +675,61 @@ export default function AgentDashboardPage() {
     }
   }
 
-  function handleAgentLogout() {
+  async function handleAvailabilityToggle() {
+    if (!currentAgentId || !agentProfile) {
+      setError("Please sign in again before changing your availability.");
+      router.replace("/agent-login");
+      return;
+    }
+
+    const nextAvailability = !isAgentAvailable;
+    setIsAvailabilityUpdating(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const data = await readApi<AgentResponse>(
+        `/agent/${encodeURIComponent(currentAgentId)}/availability`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ is_available: nextAvailability }),
+        },
+      );
+
+      setAgentProfile(data.agent);
+      setIsAgentAvailable(data.agent.is_available);
+      window.localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(data.agent));
+    } catch (currentError) {
+      setError(
+        currentError instanceof Error
+          ? currentError.message
+          : "Unable to update agent availability.",
+      );
+    } finally {
+      setIsAvailabilityUpdating(false);
+    }
+  }
+
+  async function handleAgentLogout() {
     setNotice("");
 
     if (activeSession) {
       setError("Please end the active chat before logging out.");
       return;
+    }
+
+    if (currentAgentId) {
+      try {
+        await readApi<AgentResponse>(
+          `/agent/${encodeURIComponent(currentAgentId)}/availability`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ is_available: false }),
+          },
+        );
+      } catch {
+        // Logout should still proceed if the offline update cannot be saved.
+      }
     }
 
     window.localStorage.removeItem(AGENT_STORAGE_KEY);
@@ -1033,7 +1094,8 @@ export default function AgentDashboardPage() {
                 agentEmail={currentAgentEmail}
                 agentId={currentAgentId}
                 isAvailable={isAgentAvailable}
-                onToggleAvailability={() => setIsAgentAvailable((currentValue) => !currentValue)}
+                isUpdatingAvailability={isAvailabilityUpdating}
+                onToggleAvailability={handleAvailabilityToggle}
                 onLogout={handleAgentLogout}
               />
             </aside>

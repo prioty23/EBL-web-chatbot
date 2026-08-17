@@ -44,6 +44,12 @@ type LiveChatMessagesApiResponse = {
   messages?: LiveChatMessage[];
 };
 
+type LiveChatAvailabilityApiResponse = {
+  has_available_agent?: boolean;
+  available_agent_count?: number;
+  message?: string;
+};
+
 type HumanSupportStep = "confirm" | "details" | null;
 type ViewTransitionDirection = "forward" | "back";
 
@@ -80,6 +86,8 @@ const chatbotText = translations.en.chatbot;
 const CHATBOT_API_URL = "http://127.0.0.1:8000/chat";
 const CHATBOT_FEEDBACK_API_URL = "http://127.0.0.1:8000/chat/feedback";
 const LIVE_CHAT_SESSION_API_URL = "http://127.0.0.1:8000/live-chat/sessions";
+const LIVE_CHAT_AVAILABILITY_API_URL =
+  "http://127.0.0.1:8000/live-chat/availability";
 const ERROR_MESSAGE =
   "Sorry, I could not connect to the chatbot server. Please try again later.";
 const HUMAN_SUPPORT_ACTION = "Human Support";
@@ -98,6 +106,8 @@ const HUMAN_SUPPORT_WAITING_MESSAGE =
   "An EBL Support Agent will join the chat as soon as possible.";
 const HUMAN_SUPPORT_BUSY_MESSAGE =
   "Our EBL support agents are currently busy. Please wait a little longer, or try again later if the matter is not urgent.";
+const HUMAN_SUPPORT_UNAVAILABLE_MESSAGE =
+  "Our EBL support agents are currently unavailable right now. Please try again later or use the Complaint Cell option for urgent support.";
 const HUMAN_SUPPORT_SEND_ERROR_MESSAGE =
   "Sorry, I could not send your message to the support agent. Please try again.";
 const HUMAN_SUPPORT_MESSAGE_SOURCES = new Set([
@@ -233,6 +243,29 @@ function normalizeBangladeshMobileNumber(phoneNumber: string) {
   }
 
   return "";
+}
+
+async function getLiveChatAvailability() {
+  const response = await fetch(LIVE_CHAT_AVAILABILITY_API_URL);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json() as Promise<LiveChatAvailabilityApiResponse>;
+}
+
+async function getApiErrorMessage(response: Response, fallbackMessage: string) {
+  try {
+    const payload = (await response.json()) as {
+      detail?: string;
+      message?: string;
+    };
+
+    return payload.detail || payload.message || fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
 }
 
 function SendIcon({ className = "h-5 w-5" }: { className?: string }) {
@@ -1937,8 +1970,25 @@ export default function Chatbot() {
     setIsLoading(true);
 
     const minimumResponseDelay = wait(BOT_RESPONSE_DELAY_MS);
+    const availability = await getLiveChatAvailability().catch(() => null);
 
     await minimumResponseDelay;
+
+    if (availability?.has_available_agent === false) {
+      setHumanSupportStep(null);
+      setHumanSupportFormError("");
+      setMessages([
+        ...chatWithUserMessage,
+        {
+          role: "bot",
+          text: availability.message || HUMAN_SUPPORT_UNAVAILABLE_MESSAGE,
+          source: "live-chat-agent",
+          quickActions: MAIN_MENU_QUICK_ACTIONS,
+        },
+      ]);
+      setIsLoading(false);
+      return;
+    }
 
     setHumanSupportStep("details");
     setHumanSupportFormError("");
@@ -2041,7 +2091,9 @@ export default function Chatbot() {
       });
 
       if (!response.ok) {
-        throw new Error("Live chat request failed");
+        throw new Error(
+          await getApiErrorMessage(response, HUMAN_SUPPORT_UNAVAILABLE_MESSAGE),
+        );
       }
 
       const data = (await response.json()) as LiveChatApiResponse;
@@ -2071,17 +2123,22 @@ export default function Chatbot() {
       setHumanSupportName("");
       setHumanSupportPhone("");
       setMessages([...chatWithUserMessage, waitingMessage]);
-    } catch {
+    } catch (currentError) {
       await minimumResponseDelay;
 
       setHumanSupportName("");
       setHumanSupportPhone("");
+      const replyText =
+        currentError instanceof Error && currentError.message !== "Failed to fetch"
+          ? currentError.message
+          : ERROR_MESSAGE;
       setMessages([
         ...chatWithUserMessage,
         {
           role: "bot",
-          text: ERROR_MESSAGE,
+          text: replyText,
           source: "live-chat-agent",
+          quickActions: MAIN_MENU_QUICK_ACTIONS,
         },
       ]);
     } finally {

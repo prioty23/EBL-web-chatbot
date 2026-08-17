@@ -18,6 +18,7 @@ BACKEND_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND_DIR))
 
 import main  # noqa: E402
+from agent_database import DEFAULT_AGENT_ID, seed_default_agent, update_agent_availability  # noqa: E402
 from database import DATABASE_NAME  # noqa: E402
 from live_chat_database import create_live_chat_database  # noqa: E402
 from schemas import (  # noqa: E402
@@ -69,6 +70,8 @@ def assert_true(condition: bool, message: str):
 
 def run_live_chat_foundation_test():
     create_live_chat_database()
+    seed_default_agent()
+    update_agent_availability(DEFAULT_AGENT_ID, True)
 
     chat_session_id = f"live-chat-test-{uuid.uuid4().hex}"
     support_session_id = ""

@@ -52,3 +52,7 @@ class LiveChatFeedbackRequest(BaseModel):
 class AgentLoginRequest(BaseModel):
     email: str
     password: str
+
+
+class AgentAvailabilityRequest(BaseModel):
+    is_available: bool

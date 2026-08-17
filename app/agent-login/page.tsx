@@ -13,6 +13,7 @@ type AgentProfile = {
   name: string;
   email: string;
   is_active: boolean;
+  is_available: boolean;
 };
 
 type AgentLoginResponse = {
