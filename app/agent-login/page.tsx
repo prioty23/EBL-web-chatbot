@@ -71,9 +71,9 @@ export default function AgentLoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#F4F7F6_0%,#E7F0ED_100%)] px-4 py-8 text-[#10231D]">
-      <section className="w-full max-w-md overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-xl shadow-[#006A4E]/10">
-        <div className="bg-gradient-to-r from-[#00543E] via-[#006A4E] to-[#004E3A] px-6 py-6 text-white">
+    <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#F4F7F6_0%,#EAF4FB_100%)] px-4 py-8 text-[#10231D]">
+      <section className="w-full max-w-md overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-xl shadow-[#005B96]/10">
+        <div className="bg-gradient-to-r from-[#004A7C] via-[#005B96] to-[#003F68] px-6 py-6 text-white">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 overflow-hidden">
               <Image
@@ -86,7 +86,7 @@ export default function AgentLoginPage() {
               />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#DCEFFB]">
                 Eastern Bank PLC.
               </p>
               <h1 className="mt-0.5 text-2xl font-bold leading-tight">
@@ -94,7 +94,7 @@ export default function AgentLoginPage() {
               </h1>
             </div>
           </div>
-          <p className="mt-4 text-sm leading-6 text-emerald-50">
+          <p className="mt-4 text-sm leading-6 text-[#EAF4FB]">
             Sign in to manage EBL live chat support requests.
           </p>
         </div>
@@ -118,7 +118,7 @@ export default function AgentLoginPage() {
               placeholder="support@ebl.com"
               autoComplete="email"
               required
-              className="mt-2 min-h-12 w-full rounded-[8px] border border-[#C9D7D3] bg-white px-4 text-sm text-[#20332D] outline-none transition duration-200 placeholder:text-[#8A9894] focus:border-[#006A4E] focus:ring-2 focus:ring-[#006A4E]/10"
+              className="mt-2 min-h-12 w-full rounded-[8px] border border-[#C9D7D3] bg-white px-4 text-sm text-[#20332D] outline-none transition duration-200 placeholder:text-[#8A9894] focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10"
             />
           </div>
 
@@ -134,14 +134,14 @@ export default function AgentLoginPage() {
               placeholder="Enter password"
               autoComplete="current-password"
               required
-              className="mt-2 min-h-12 w-full rounded-[8px] border border-[#C9D7D3] bg-white px-4 text-sm text-[#20332D] outline-none transition duration-200 placeholder:text-[#8A9894] focus:border-[#006A4E] focus:ring-2 focus:ring-[#006A4E]/10"
+              className="mt-2 min-h-12 w-full rounded-[8px] border border-[#C9D7D3] bg-white px-4 text-sm text-[#20332D] outline-none transition duration-200 placeholder:text-[#8A9894] focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10"
             />
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#006A4E] px-5 text-sm font-bold text-white shadow-md shadow-[#006A4E]/15 transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9FB8B0] disabled:shadow-none disabled:hover:translate-y-0 disabled:active:scale-100"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-full border border-[#D8B229] bg-[#F4C430] px-5 text-sm font-bold text-[#302500] shadow-md shadow-[#B78C00]/15 transition duration-200 hover:-translate-y-0.5 hover:bg-[#E9B600] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#E7DDAE] disabled:text-[#7A6A2A] disabled:shadow-none disabled:hover:translate-y-0 disabled:active:scale-100"
           >
             {isSubmitting ? "Signing in..." : "Sign In"}
           </button>
