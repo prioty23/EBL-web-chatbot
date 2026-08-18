@@ -340,11 +340,7 @@ function ChatHistoryPanel({
 }) {
   return (
     <section className="agent-dashboard-card overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition duration-200 hover:bg-[#F3F9FD]"
-      >
+      <div className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
         <span className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF4FB] text-[#005B96]">
             <ChatIcon className="h-5 w-5" />
@@ -356,10 +352,14 @@ function ChatHistoryPanel({
             </span>
           </span>
         </span>
-        <span className="shrink-0 rounded-full border border-[#CFE2EC] bg-[#F5FAFD] px-3 py-1 text-xs font-bold text-[#005B96]">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="shrink-0 rounded-full border border-[#CFE2EC] bg-[#F5FAFD] px-3 py-1 text-xs font-bold text-[#005B96] transition duration-200 hover:-translate-y-0.5 hover:border-[#005B96]/45 hover:bg-[#EAF4FB] active:scale-[0.98]"
+        >
           {isOpen ? "Hide" : "View"}
-        </span>
-      </button>
+        </button>
+      </div>
 
       {isOpen ? (
         <div className="max-h-56 overflow-y-auto border-t border-[#E5EFEC] p-2">
