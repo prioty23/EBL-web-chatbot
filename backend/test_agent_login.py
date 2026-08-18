@@ -89,6 +89,10 @@ def run_agent_login_test():
         raise AssertionError("Wrong password was accepted.")
 
 
+def test_agent_login():
+    run_agent_login_test()
+
+
 def main_entry():
     try:
         run_agent_login_test()

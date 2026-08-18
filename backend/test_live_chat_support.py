@@ -332,6 +332,10 @@ def run_live_chat_foundation_test():
         cleanup_live_chat(chat_session_id, support_session_id)
 
 
+def test_live_chat_foundation():
+    run_live_chat_foundation_test()
+
+
 def main_entry():
     try:
         run_live_chat_foundation_test()
