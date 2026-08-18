@@ -60,6 +60,11 @@ def run_agent_login_test():
         availability_response["has_available_agent"] is False,
         "Live chat availability should be false when the agent is offline.",
     )
+    assert_true(
+        "Complaint Cell" in availability_response["message"]
+        and "Contact Us" in availability_response["message"],
+        "Offline agent fallback should guide customers to support options.",
+    )
 
     online_response = main.update_support_agent_availability(
         DEFAULT_AGENT_ID,

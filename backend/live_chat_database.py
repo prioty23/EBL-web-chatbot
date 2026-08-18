@@ -1,6 +1,7 @@
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
 
 from database import DATABASE_NAME, add_column_if_missing, create_database
 
@@ -13,16 +14,62 @@ CUSTOMER_SENDER = "customer"
 AGENT_SENDER = "agent"
 SYSTEM_SENDER = "system"
 
+LIVE_CHAT_INACTIVITY_WARNING_MESSAGE = (
+    "This live chat session will end soon due to inactivity. "
+    "Please send a message if you still need support."
+)
+LIVE_CHAT_INACTIVITY_END_MESSAGE = "Live chat session ended due to inactivity."
+DEFAULT_INACTIVITY_WARNING_SECONDS = 180
+DEFAULT_INACTIVITY_TIMEOUT_SECONDS = 300
+
 
 def current_time_string():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def parse_time_string(value):
+    if not value:
+        return None
+
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def future_time_string(seconds):
+    return (datetime.now() + timedelta(seconds=seconds)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def is_future_time(value):
+    if not value:
+        return False
+
+    try:
+        parsed_time = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return False
+
+    return parsed_time > datetime.now()
+
+
+def get_timeout_seconds(env_name, default_value):
+    try:
+        value = int(os.getenv(env_name, str(default_value)))
+    except ValueError:
+        return default_value
+
+    return max(1, value)
 
 
 def row_to_dict(row):
     if not row:
         return None
 
-    return dict(row)
+    data = dict(row)
+    data["agent_is_typing"] = is_future_time(data.get("agent_typing_until", ""))
+    data["customer_is_typing"] = is_future_time(data.get("customer_typing_until", ""))
+    return data
 
 
 def get_connection():
@@ -51,6 +98,10 @@ def create_live_chat_database():
             ended_at TEXT,
             feedback TEXT,
             feedback_at TEXT,
+            agent_typing_until TEXT,
+            customer_typing_until TEXT,
+            last_activity_at TEXT,
+            inactivity_warning_sent_at TEXT,
             updated_at TEXT
         )
     """)
@@ -73,6 +124,38 @@ def create_live_chat_database():
         "feedback_at",
         "TEXT",
     )
+    add_column_if_missing(
+        cursor,
+        "live_chat_sessions",
+        "agent_typing_until",
+        "TEXT",
+    )
+    add_column_if_missing(
+        cursor,
+        "live_chat_sessions",
+        "customer_typing_until",
+        "TEXT",
+    )
+    add_column_if_missing(
+        cursor,
+        "live_chat_sessions",
+        "last_activity_at",
+        "TEXT",
+    )
+    add_column_if_missing(
+        cursor,
+        "live_chat_sessions",
+        "inactivity_warning_sent_at",
+        "TEXT",
+    )
+
+    now = current_time_string()
+    cursor.execute("""
+        UPDATE live_chat_sessions
+        SET last_activity_at = COALESCE(NULLIF(updated_at, ''), NULLIF(created_at, ''), ?)
+        WHERE last_activity_at IS NULL
+        OR last_activity_at = ''
+    """, (now,))
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS live_chat_messages (
@@ -208,9 +291,13 @@ def create_live_chat_session(chat_session_id, customer_name="Customer", customer
             ended_at,
             feedback,
             feedback_at,
+            agent_typing_until,
+            customer_typing_until,
+            last_activity_at,
+            inactivity_warning_sent_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         support_session_id,
         chat_session_id,
@@ -222,6 +309,10 @@ def create_live_chat_session(chat_session_id, customer_name="Customer", customer
         "",
         "",
         "",
+        "",
+        "",
+        "",
+        now,
         "",
         now,
     ))
@@ -277,6 +368,29 @@ def get_active_live_chat_session():
     return session
 
 
+def get_live_chat_history_sessions(limit=20):
+    create_live_chat_database()
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM live_chat_sessions
+        WHERE status = ?
+        ORDER BY ended_at DESC, updated_at DESC, id DESC
+        LIMIT ?
+    """, (
+        ENDED_STATUS,
+        limit,
+    ))
+
+    sessions = [row_to_dict(row) for row in cursor.fetchall()]
+    connection.close()
+
+    return sessions
+
+
 def accept_live_chat_session(support_session_id, agent_id="agent"):
     create_live_chat_database()
 
@@ -324,12 +438,16 @@ def accept_live_chat_session(support_session_id, agent_id="agent"):
         SET status = ?,
             agent_id = ?,
             accepted_at = ?,
+            last_activity_at = ?,
+            inactivity_warning_sent_at = ?,
             updated_at = ?
         WHERE support_session_id = ?
     """, (
         ACTIVE_STATUS,
         normalized_agent_id,
         now,
+        now,
+        "",
         now,
         support_session_id,
     ))
@@ -406,14 +524,45 @@ def save_live_chat_message(support_session_id, sender_type, message, sender_id="
 
     message_id = cursor.lastrowid
 
-    cursor.execute("""
-        UPDATE live_chat_sessions
-        SET updated_at = ?
-        WHERE support_session_id = ?
-    """, (
-        now,
-        support_session_id,
-    ))
+    if normalized_sender_type == AGENT_SENDER:
+        cursor.execute("""
+            UPDATE live_chat_sessions
+            SET agent_typing_until = ?,
+                last_activity_at = ?,
+                inactivity_warning_sent_at = ?,
+                updated_at = ?
+            WHERE support_session_id = ?
+        """, (
+            "",
+            now,
+            "",
+            now,
+            support_session_id,
+        ))
+    elif normalized_sender_type == CUSTOMER_SENDER:
+        cursor.execute("""
+            UPDATE live_chat_sessions
+            SET customer_typing_until = ?,
+                last_activity_at = ?,
+                inactivity_warning_sent_at = ?,
+                updated_at = ?
+            WHERE support_session_id = ?
+        """, (
+            "",
+            now,
+            "",
+            now,
+            support_session_id,
+        ))
+    else:
+        cursor.execute("""
+            UPDATE live_chat_sessions
+            SET updated_at = ?
+            WHERE support_session_id = ?
+        """, (
+            now,
+            support_session_id,
+        ))
 
     connection.commit()
 
@@ -431,6 +580,201 @@ def save_live_chat_message(support_session_id, sender_type, message, sender_id="
         "reason": "saved",
         "message": saved_message,
     }
+
+
+def update_live_chat_typing_status(
+    support_session_id,
+    sender_type,
+    sender_id="",
+    is_typing=False,
+    seconds=4,
+):
+    create_live_chat_database()
+
+    session = get_live_chat_session(support_session_id)
+
+    if not session:
+        return {
+            "updated": False,
+            "reason": "not_found",
+            "session": None,
+        }
+
+    if session["status"] == ENDED_STATUS:
+        return {
+            "updated": False,
+            "reason": "ended",
+            "session": session,
+        }
+
+    normalized_sender_type = (sender_type or "").strip().lower()
+
+    if normalized_sender_type not in [AGENT_SENDER, CUSTOMER_SENDER]:
+        return {
+            "updated": False,
+            "reason": "invalid_sender_type",
+            "session": session,
+        }
+
+    if normalized_sender_type == AGENT_SENDER and session["status"] != ACTIVE_STATUS:
+        return {
+            "updated": False,
+            "reason": "not_active",
+            "session": session,
+        }
+
+    if normalized_sender_type == CUSTOMER_SENDER and session["status"] not in [WAITING_STATUS, ACTIVE_STATUS]:
+        return {
+            "updated": False,
+            "reason": "not_active",
+            "session": session,
+        }
+
+    normalized_sender_id = (sender_id or "").strip()
+
+    if (
+        normalized_sender_type == AGENT_SENDER
+        and session.get("agent_id")
+        and normalized_sender_id
+        and session["agent_id"] != normalized_sender_id
+    ):
+        return {
+            "updated": False,
+            "reason": "wrong_agent",
+            "session": session,
+        }
+
+    if (
+        normalized_sender_type == CUSTOMER_SENDER
+        and session.get("chat_session_id")
+        and normalized_sender_id
+        and session["chat_session_id"] != normalized_sender_id
+    ):
+        return {
+            "updated": False,
+            "reason": "wrong_customer",
+            "session": session,
+        }
+
+    now = current_time_string()
+    typing_until = future_time_string(seconds) if is_typing else ""
+    typing_column = (
+        "agent_typing_until"
+        if normalized_sender_type == AGENT_SENDER
+        else "customer_typing_until"
+    )
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(f"""
+        UPDATE live_chat_sessions
+        SET {typing_column} = ?,
+            last_activity_at = ?,
+            inactivity_warning_sent_at = ?,
+            updated_at = ?
+        WHERE support_session_id = ?
+    """, (
+        typing_until,
+        now,
+        "",
+        now,
+        support_session_id,
+    ))
+
+    connection.commit()
+    connection.close()
+
+    return {
+        "updated": True,
+        "reason": "updated",
+        "session": get_live_chat_session(support_session_id),
+    }
+
+
+def refresh_live_chat_session_timeout(support_session_id):
+    create_live_chat_database()
+
+    session = get_live_chat_session(support_session_id)
+
+    if not session or session["status"] != ACTIVE_STATUS:
+        return session
+
+    warning_seconds = get_timeout_seconds(
+        "LIVE_CHAT_INACTIVITY_WARNING_SECONDS",
+        DEFAULT_INACTIVITY_WARNING_SECONDS,
+    )
+    timeout_seconds = get_timeout_seconds(
+        "LIVE_CHAT_INACTIVITY_TIMEOUT_SECONDS",
+        DEFAULT_INACTIVITY_TIMEOUT_SECONDS,
+    )
+
+    if warning_seconds >= timeout_seconds:
+        warning_seconds = max(1, timeout_seconds - 60)
+
+    last_activity = parse_time_string(
+        session.get("last_activity_at")
+        or session.get("updated_at")
+        or session.get("created_at")
+    )
+
+    if not last_activity:
+        return session
+
+    inactive_seconds = (datetime.now() - last_activity).total_seconds()
+
+    if inactive_seconds >= timeout_seconds:
+        result = end_live_chat_session(
+            support_session_id=support_session_id,
+            ended_by="inactivity",
+        )
+        return result["session"]
+
+    if inactive_seconds < warning_seconds or session.get("inactivity_warning_sent_at"):
+        return session
+
+    save_live_chat_message(
+        support_session_id=support_session_id,
+        sender_type=SYSTEM_SENDER,
+        sender_id="system",
+        message=LIVE_CHAT_INACTIVITY_WARNING_MESSAGE,
+    )
+
+    now = current_time_string()
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("""
+        UPDATE live_chat_sessions
+        SET inactivity_warning_sent_at = ?,
+            updated_at = ?
+        WHERE support_session_id = ?
+    """, (
+        now,
+        now,
+        support_session_id,
+    ))
+    connection.commit()
+    connection.close()
+
+    return get_live_chat_session(support_session_id)
+
+
+def refresh_live_chat_timeouts():
+    create_live_chat_database()
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT support_session_id
+        FROM live_chat_sessions
+        WHERE status = ?
+    """, (ACTIVE_STATUS,))
+
+    support_session_ids = [row["support_session_id"] for row in cursor.fetchall()]
+    connection.close()
+
+    for support_session_id in support_session_ids:
+        refresh_live_chat_session_timeout(support_session_id)
 
 
 def get_live_chat_messages(support_session_id, after_id=0, limit=100):
@@ -527,11 +871,16 @@ def end_live_chat_session(support_session_id, ended_by="agent"):
         }
 
     ended_by_label = (ended_by or "agent").strip() or "agent"
+    system_message = (
+        LIVE_CHAT_INACTIVITY_END_MESSAGE
+        if ended_by_label.lower() == "inactivity"
+        else f"Live chat session ended by {ended_by_label}."
+    )
     save_live_chat_message(
         support_session_id=support_session_id,
         sender_type=SYSTEM_SENDER,
         sender_id="system",
-        message=f"Live chat session ended by {ended_by_label}.",
+        message=system_message,
     )
 
     now = current_time_string()
@@ -543,11 +892,17 @@ def end_live_chat_session(support_session_id, ended_by="agent"):
         UPDATE live_chat_sessions
         SET status = ?,
             ended_at = ?,
+            agent_typing_until = ?,
+            customer_typing_until = ?,
+            inactivity_warning_sent_at = ?,
             updated_at = ?
         WHERE support_session_id = ?
     """, (
         ENDED_STATUS,
         now,
+        "",
+        "",
+        "",
         now,
         support_session_id,
     ))

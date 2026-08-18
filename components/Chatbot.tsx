@@ -2,7 +2,7 @@
 
 import { translations } from "@/data/translations";
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 
 type Message = {
   role: "bot" | "user";
@@ -25,6 +25,8 @@ type ChatApiResponse = {
 type LiveChatSession = {
   support_session_id?: string;
   status?: string;
+  agent_is_typing?: boolean;
+  customer_is_typing?: boolean;
 };
 
 type LiveChatApiResponse = {
@@ -107,15 +109,18 @@ const HUMAN_SUPPORT_WAITING_MESSAGE =
 const HUMAN_SUPPORT_BUSY_MESSAGE =
   "Our EBL support agents are currently busy. Please wait a little longer, or try again later if the matter is not urgent.";
 const HUMAN_SUPPORT_UNAVAILABLE_MESSAGE =
-  "Our EBL support agents are currently unavailable right now. Please try again later or use the Complaint Cell option for urgent support.";
+  "All EBL Support Agents are unavailable at the moment. You can use Complaint Cell for formal complaints or Contact Us for general support.";
 const HUMAN_SUPPORT_SEND_ERROR_MESSAGE =
   "Sorry, I could not send your message to the support agent. Please try again.";
 const HUMAN_SUPPORT_MESSAGE_SOURCES = new Set([
   "live-chat-agent",
   "live-chat-support-agent",
 ]);
+const HUMAN_SUPPORT_FALLBACK_QUICK_ACTIONS = ["Complaint Cell", "Contact Us"];
 const LIVE_CHAT_SESSION_STORAGE_KEY = "eastern_ai_live_chat_session_id";
 const LIVE_CHAT_MESSAGE_POLL_MS = 2500;
+const LIVE_CHAT_TYPING_SIGNAL_MS = 1500;
+const LIVE_CHAT_TYPING_IDLE_MS = 3000;
 const LIVE_CHAT_BUSY_NOTICE_MS = 180000;
 const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
@@ -1449,6 +1454,7 @@ export default function Chatbot() {
   const [humanSupportFormError, setHumanSupportFormError] = useState("");
   const [liveChatSupportSessionId, setLiveChatSupportSessionId] = useState("");
   const [liveChatStatus, setLiveChatStatus] = useState("");
+  const [isLiveChatAgentTyping, setIsLiveChatAgentTyping] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([]);
 
@@ -1457,6 +1463,8 @@ export default function Chatbot() {
   const liveChatLastMessageIdRef = useRef(0);
   const liveChatBusyTimerRef = useRef<number | null>(null);
   const liveChatBusyNoticeSessionRef = useRef("");
+  const liveChatCustomerTypingStopTimerRef = useRef<number | null>(null);
+  const liveChatLastCustomerTypingSignalRef = useRef(0);
   const widgetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -1473,7 +1481,13 @@ export default function Chatbot() {
       top: messageListRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, isOpen, hasStartedConversation, isLoading]);
+  }, [
+    messages,
+    isOpen,
+    hasStartedConversation,
+    isLoading,
+    isLiveChatAgentTyping,
+  ]);
 
   useEffect(() => {
     if (
@@ -1565,6 +1579,9 @@ export default function Chatbot() {
         }
 
         const nextStatus = data.session?.status ?? "";
+        setIsLiveChatAgentTyping(
+          Boolean(data.session?.agent_is_typing && nextStatus === "active"),
+        );
 
         if (nextStatus) {
           setLiveChatStatus(nextStatus);
@@ -1573,6 +1590,7 @@ export default function Chatbot() {
         if (nextStatus === "ended") {
           localStorage.removeItem(LIVE_CHAT_SESSION_STORAGE_KEY);
           setLiveChatSupportSessionId("");
+          setIsLiveChatAgentTyping(false);
         }
       } catch {
         // Keep polling quietly; support chat should not interrupt normal chatbot use.
@@ -1650,6 +1668,10 @@ export default function Chatbot() {
       if (liveChatBusyTimerRef.current) {
         clearTimeout(liveChatBusyTimerRef.current);
       }
+
+      if (liveChatCustomerTypingStopTimerRef.current) {
+        clearTimeout(liveChatCustomerTypingStopTimerRef.current);
+      }
     };
   }, []);
 
@@ -1695,6 +1717,81 @@ export default function Chatbot() {
     return currentSessionId;
   };
 
+  const clearLiveChatCustomerTypingTimer = () => {
+    if (liveChatCustomerTypingStopTimerRef.current) {
+      window.clearTimeout(liveChatCustomerTypingStopTimerRef.current);
+      liveChatCustomerTypingStopTimerRef.current = null;
+    }
+  };
+
+  const sendLiveChatCustomerTypingStatus = async (isTyping: boolean) => {
+    if (!liveChatSupportSessionId || liveChatStatus === "ended") {
+      return;
+    }
+
+    try {
+      await fetch(
+        `${LIVE_CHAT_SESSION_API_URL}/${encodeURIComponent(
+          liveChatSupportSessionId,
+        )}/typing`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sender_type: "customer",
+            sender_id: getCurrentSessionId(),
+            is_typing: isTyping,
+          }),
+        },
+      );
+    } catch {
+      // Typing presence is temporary, so it should not interrupt the customer.
+    }
+  };
+
+  const resetLiveChatCustomerTypingStatus = () => {
+    clearLiveChatCustomerTypingTimer();
+    liveChatLastCustomerTypingSignalRef.current = 0;
+    void sendLiveChatCustomerTypingStatus(false);
+  };
+
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    setInput(nextValue);
+
+    if (
+      !liveChatSupportSessionId ||
+      liveChatStatus === "ended" ||
+      humanSupportStep === "details"
+    ) {
+      return;
+    }
+
+    if (!nextValue.trim()) {
+      resetLiveChatCustomerTypingStatus();
+      return;
+    }
+
+    const now = Date.now();
+
+    if (
+      now - liveChatLastCustomerTypingSignalRef.current >
+      LIVE_CHAT_TYPING_SIGNAL_MS
+    ) {
+      liveChatLastCustomerTypingSignalRef.current = now;
+      void sendLiveChatCustomerTypingStatus(true);
+    }
+
+    clearLiveChatCustomerTypingTimer();
+    liveChatCustomerTypingStopTimerRef.current = window.setTimeout(() => {
+      liveChatCustomerTypingStopTimerRef.current = null;
+      liveChatLastCustomerTypingSignalRef.current = 0;
+      void sendLiveChatCustomerTypingStatus(false);
+    }, LIVE_CHAT_TYPING_IDLE_MS);
+  };
+
   const handleConfirmEndSession = () => {
     const newSessionId = createSessionId();
     const supportSessionToEnd = liveChatSupportSessionId;
@@ -1727,6 +1824,7 @@ export default function Chatbot() {
     setHumanSupportFormError("");
     setLiveChatSupportSessionId("");
     setLiveChatStatus("");
+    setIsLiveChatAgentTyping(false);
     liveChatLastMessageIdRef.current = 0;
     liveChatBusyNoticeSessionRef.current = "";
   };
@@ -1746,6 +1844,7 @@ export default function Chatbot() {
     setHumanSupportName("");
     setHumanSupportPhone("");
     setHumanSupportFormError("");
+    setIsLiveChatAgentTyping(false);
   };
 
   const handleShowMainMenu = () => {
@@ -1754,6 +1853,7 @@ export default function Chatbot() {
     setHumanSupportName("");
     setHumanSupportPhone("");
     setHumanSupportFormError("");
+    setIsLiveChatAgentTyping(false);
     setMessages((currentMessages) => [
       ...currentMessages,
       {
@@ -1874,6 +1974,8 @@ export default function Chatbot() {
       return;
     }
 
+    resetLiveChatCustomerTypingStatus();
+
     const chatWithUserMessage: Message[] = [
       ...messages,
       { role: "user", text: userMessage },
@@ -1983,7 +2085,7 @@ export default function Chatbot() {
           role: "bot",
           text: availability.message || HUMAN_SUPPORT_UNAVAILABLE_MESSAGE,
           source: "live-chat-agent",
-          quickActions: MAIN_MENU_QUICK_ACTIONS,
+          quickActions: HUMAN_SUPPORT_FALLBACK_QUICK_ACTIONS,
         },
       ]);
       setIsLoading(false);
@@ -2138,7 +2240,7 @@ export default function Chatbot() {
           role: "bot",
           text: replyText,
           source: "live-chat-agent",
-          quickActions: MAIN_MENU_QUICK_ACTIONS,
+          quickActions: HUMAN_SUPPORT_FALLBACK_QUICK_ACTIONS,
         },
       ]);
     } finally {
@@ -2693,6 +2795,26 @@ export default function Chatbot() {
       message.role === "bot" ? index : latestIndex,
     -1,
   );
+
+  const renderLiveChatAgentTypingIndicator = () => (
+    <div
+      className="animate-ebl-message-in"
+      aria-label="EBL Support Agent is typing"
+      aria-live="polite"
+    >
+      <p className="mb-1 ml-1 text-xs font-medium text-[#006A4E]">
+        Eastern Bank PLC
+      </p>
+      <div className="inline-flex max-w-[88%] items-center gap-2 rounded-2xl border border-[#C8D8DD] bg-[#EEF4F6] px-4 py-3 text-sm font-medium leading-6 text-[#223A42] shadow-sm">
+        <span>EBL Support Agent is typing...</span>
+        <span className="flex shrink-0 gap-1" aria-hidden="true">
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#005B96]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#005B96] [animation-delay:120ms]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#005B96] [animation-delay:240ms]" />
+        </span>
+      </div>
+    </div>
+  );
   const panelAnimationClass =
     viewTransitionDirection === "forward"
       ? "animate-ebl-panel-forward-in"
@@ -3004,6 +3126,9 @@ export default function Chatbot() {
                     );
                   })}
 
+                  {isLiveChatAgentTyping
+                    ? renderLiveChatAgentTypingIndicator()
+                    : null}
                   {isLoading ? renderTypingIndicator() : null}
                 </div>
 
@@ -3015,7 +3140,7 @@ export default function Chatbot() {
                     ref={inputRef}
                     type="text"
                     value={input}
-                    onChange={(event) => setInput(event.target.value)}
+                    onChange={handleInputChange}
                     placeholder={
                       humanSupportStep === "details"
                         ? "Complete the support form above..."

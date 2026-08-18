@@ -41,6 +41,12 @@ class LiveChatMessageRequest(BaseModel):
     sender_id: Optional[str] = None
 
 
+class LiveChatTypingRequest(BaseModel):
+    sender_type: str
+    sender_id: Optional[str] = None
+    is_typing: bool = False
+
+
 class LiveChatEndRequest(BaseModel):
     ended_by: Optional[str] = None
 

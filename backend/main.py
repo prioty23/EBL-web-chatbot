@@ -20,6 +20,7 @@ from schemas import (
     LiveChatFeedbackRequest,
     LiveChatMessageRequest,
     LiveChatStartRequest,
+    LiveChatTypingRequest,
 )
 
 from email_sender import send_final_status_email
@@ -72,11 +73,15 @@ from live_chat_database import (
     create_live_chat_session,
     end_live_chat_session,
     get_active_live_chat_session,
+    get_live_chat_history_sessions,
     get_live_chat_messages,
     get_live_chat_session,
     get_waiting_live_chat_sessions,
+    refresh_live_chat_session_timeout,
+    refresh_live_chat_timeouts,
     save_live_chat_feedback,
     save_live_chat_message,
+    update_live_chat_typing_status,
 )
 
 from agent_database import (
@@ -260,8 +265,8 @@ from response_cleaner import clean_bank_contact_information
 
 ERROR_REPLY = "Sorry, I could not process that request right now. Please try again later."
 NO_LIVE_AGENT_REPLY = (
-    "Our EBL support agents are currently unavailable right now. "
-    "Please try again later or use the Complaint Cell option for urgent support."
+    "All EBL Support Agents are unavailable at the moment. "
+    "You can use Complaint Cell for formal complaints or Contact Us for general support."
 )
 SCHEDULE_CHARGES_MENU_REPLY = (
     "Which banking charge do you want to know Retail, SME, Corporate "
@@ -7903,6 +7908,8 @@ def start_live_chat_session(request: LiveChatStartRequest):
 
 @app.get("/live-chat/sessions/waiting")
 def list_waiting_live_chat_sessions(limit: int = 20):
+    refresh_live_chat_timeouts()
+
     return {
         "sessions": get_waiting_live_chat_sessions(limit=limit),
     }
@@ -7910,13 +7917,25 @@ def list_waiting_live_chat_sessions(limit: int = 20):
 
 @app.get("/live-chat/sessions/active")
 def get_active_live_chat_support_session():
+    refresh_live_chat_timeouts()
+
     return {
         "session": get_active_live_chat_session(),
     }
 
 
+@app.get("/live-chat/sessions/history")
+def list_live_chat_history_sessions(limit: int = 20):
+    refresh_live_chat_timeouts()
+
+    return {
+        "sessions": get_live_chat_history_sessions(limit=limit),
+    }
+
+
 @app.get("/live-chat/sessions/{support_session_id}")
 def get_live_chat_session_details(support_session_id: str):
+    refresh_live_chat_session_timeout(support_session_id)
     live_chat_session = get_live_chat_session(support_session_id)
 
     if not live_chat_session:
@@ -7935,6 +7954,8 @@ def accept_live_chat_support_session(
     support_session_id: str,
     request: LiveChatAcceptRequest,
 ):
+    refresh_live_chat_timeouts()
+
     result = accept_live_chat_session(
         support_session_id=support_session_id,
         agent_id=request.agent_id or "agent",
@@ -7970,6 +7991,7 @@ def list_live_chat_messages(
     after_id: int = 0,
     limit: int = 100,
 ):
+    refresh_live_chat_session_timeout(support_session_id)
     live_chat_session = get_live_chat_session(support_session_id)
 
     if not live_chat_session:
@@ -8027,6 +8049,60 @@ def create_live_chat_message(
     return {
         "message": "Live chat message saved.",
         "chat_message": result["message"],
+    }
+
+
+@app.post("/live-chat/sessions/{support_session_id}/typing")
+def update_live_chat_typing_indicator(
+    support_session_id: str,
+    request: LiveChatTypingRequest,
+):
+    result = update_live_chat_typing_status(
+        support_session_id=support_session_id,
+        sender_type=request.sender_type,
+        sender_id=request.sender_id or "",
+        is_typing=request.is_typing,
+    )
+
+    if result["reason"] == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail="Live chat session not found.",
+        )
+
+    if result["reason"] == "ended":
+        raise HTTPException(
+            status_code=400,
+            detail="This live chat session has already ended.",
+        )
+
+    if result["reason"] == "not_active":
+        raise HTTPException(
+            status_code=400,
+            detail="Typing status can only be updated for a waiting or active live chat session.",
+        )
+
+    if result["reason"] == "invalid_sender_type":
+        raise HTTPException(
+            status_code=400,
+            detail="Typing status can only be sent by customer or agent.",
+        )
+
+    if result["reason"] == "wrong_agent":
+        raise HTTPException(
+            status_code=403,
+            detail="Only the assigned agent can update typing status for this session.",
+        )
+
+    if result["reason"] == "wrong_customer":
+        raise HTTPException(
+            status_code=403,
+            detail="Only the matching customer session can update typing status for this session.",
+        )
+
+    return {
+        "message": "Typing status updated.",
+        "session": result["session"],
     }
 
 

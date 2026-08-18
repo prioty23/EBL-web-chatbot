@@ -9,6 +9,8 @@ from __future__ import annotations
 import sqlite3
 import sys
 import uuid
+import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -21,12 +23,17 @@ import main  # noqa: E402
 from agent_database import DEFAULT_AGENT_ID, seed_default_agent, update_agent_availability  # noqa: E402
 from database import DATABASE_NAME  # noqa: E402
 from live_chat_database import create_live_chat_database  # noqa: E402
+from live_chat_database import (  # noqa: E402
+    LIVE_CHAT_INACTIVITY_END_MESSAGE,
+    LIVE_CHAT_INACTIVITY_WARNING_MESSAGE,
+)
 from schemas import (  # noqa: E402
     LiveChatAcceptRequest,
     LiveChatEndRequest,
     LiveChatFeedbackRequest,
     LiveChatMessageRequest,
     LiveChatStartRequest,
+    LiveChatTypingRequest,
 )
 
 
@@ -72,6 +79,8 @@ def run_live_chat_foundation_test():
     create_live_chat_database()
     seed_default_agent()
     update_agent_availability(DEFAULT_AGENT_ID, True)
+    os.environ["LIVE_CHAT_INACTIVITY_WARNING_SECONDS"] = "1"
+    os.environ["LIVE_CHAT_INACTIVITY_TIMEOUT_SECONDS"] = "60"
 
     chat_session_id = f"live-chat-test-{uuid.uuid4().hex}"
     support_session_id = ""
@@ -156,6 +165,58 @@ def run_live_chat_foundation_test():
             "Active live chat session API did not return the accepted support request.",
         )
 
+        typing_response = main.update_live_chat_typing_indicator(
+            support_session_id,
+            LiveChatTypingRequest(
+                sender_type="agent",
+                sender_id="agent-1",
+                is_typing=True,
+            ),
+        )
+        assert_true(
+            typing_response["session"]["agent_is_typing"] is True,
+            "Agent typing status was not turned on.",
+        )
+
+        stopped_typing_response = main.update_live_chat_typing_indicator(
+            support_session_id,
+            LiveChatTypingRequest(
+                sender_type="agent",
+                sender_id="agent-1",
+                is_typing=False,
+            ),
+        )
+        assert_true(
+            stopped_typing_response["session"]["agent_is_typing"] is False,
+            "Agent typing status was not turned off.",
+        )
+
+        customer_typing_response = main.update_live_chat_typing_indicator(
+            support_session_id,
+            LiveChatTypingRequest(
+                sender_type="customer",
+                sender_id=chat_session_id,
+                is_typing=True,
+            ),
+        )
+        assert_true(
+            customer_typing_response["session"]["customer_is_typing"] is True,
+            "Customer typing status was not turned on.",
+        )
+
+        customer_stopped_typing_response = main.update_live_chat_typing_indicator(
+            support_session_id,
+            LiveChatTypingRequest(
+                sender_type="customer",
+                sender_id=chat_session_id,
+                is_typing=False,
+            ),
+        )
+        assert_true(
+            customer_stopped_typing_response["session"]["customer_is_typing"] is False,
+            "Customer typing status was not turned off.",
+        )
+
         message_response = main.create_live_chat_message(
             support_session_id,
             LiveChatMessageRequest(
@@ -178,6 +239,61 @@ def run_live_chat_foundation_test():
             "Live chat message API did not return the saved message.",
         )
 
+        connection = sqlite3.connect(DATABASE_NAME)
+        cursor = connection.cursor()
+        warning_activity_time = (
+            datetime.now() - timedelta(seconds=2)
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            """
+            UPDATE live_chat_sessions
+            SET last_activity_at = ?,
+                inactivity_warning_sent_at = ''
+            WHERE support_session_id = ?
+            """,
+            (warning_activity_time, support_session_id),
+        )
+        connection.commit()
+        connection.close()
+
+        warning_response = main.list_live_chat_messages(support_session_id)
+        assert_true(
+            any(
+                chat_message["message"] == LIVE_CHAT_INACTIVITY_WARNING_MESSAGE
+                for chat_message in warning_response["messages"]
+            ),
+            "Inactivity warning message was not added.",
+        )
+
+        connection = sqlite3.connect(DATABASE_NAME)
+        cursor = connection.cursor()
+        timeout_activity_time = (
+            datetime.now() - timedelta(seconds=61)
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            """
+            UPDATE live_chat_sessions
+            SET last_activity_at = ?
+            WHERE support_session_id = ?
+            """,
+            (timeout_activity_time, support_session_id),
+        )
+        connection.commit()
+        connection.close()
+
+        timeout_response = main.list_live_chat_messages(support_session_id)
+        assert_true(
+            timeout_response["session"]["status"] == "ended",
+            "Inactive live chat session was not auto-ended.",
+        )
+        assert_true(
+            any(
+                chat_message["message"] == LIVE_CHAT_INACTIVITY_END_MESSAGE
+                for chat_message in timeout_response["messages"]
+            ),
+            "Inactivity auto-end message was not added.",
+        )
+
         end_response = main.end_live_chat_support_session(
             support_session_id,
             LiveChatEndRequest(ended_by="agent-1"),
@@ -186,6 +302,17 @@ def run_live_chat_foundation_test():
             end_response["session"]["status"] == "ended",
             "Ended live chat session did not become ended.",
         )
+
+        history_response = main.list_live_chat_history_sessions(limit=100)
+        history_ids = {
+            history_session["support_session_id"]
+            for history_session in history_response["sessions"]
+        }
+        assert_true(
+            support_session_id in history_ids,
+            "Ended live chat session was not returned in history.",
+        )
+
         feedback_response = main.submit_live_chat_feedback(
             support_session_id,
             LiveChatFeedbackRequest(feedback="helpful"),
@@ -200,6 +327,8 @@ def run_live_chat_foundation_test():
         )
 
     finally:
+        os.environ.pop("LIVE_CHAT_INACTIVITY_WARNING_SECONDS", None)
+        os.environ.pop("LIVE_CHAT_INACTIVITY_TIMEOUT_SECONDS", None)
         cleanup_live_chat(chat_session_id, support_session_id)
 
 
