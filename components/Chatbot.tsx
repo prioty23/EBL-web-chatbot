@@ -662,7 +662,7 @@ function formatMessage(text: string) {
             target="_blank"
             rel="noopener noreferrer"
             title={link}
-            className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#006A4E]/20 bg-white px-2.5 py-1 text-xs font-semibold leading-none text-[#005B43] no-underline shadow-sm transition hover:border-[#006A4E]/35 hover:bg-[#F5FBF8]"
+            className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#005B96]/20 bg-white px-2.5 py-1 text-xs font-semibold leading-none text-[#004C7D] no-underline shadow-sm transition hover:border-[#FFC629]/70 hover:bg-[#FFF8D8]"
           >
             <span className="min-w-0 truncate">{getReadableLinkLabel(link)}</span>
             <ExternalLinkIcon className="h-3.5 w-3.5 shrink-0" />
@@ -817,14 +817,14 @@ function renderTableRowCard(
       key={key}
       className={
         isCorporateCharge
-          ? "min-w-0 overflow-hidden rounded-xl border border-emerald-100 bg-white text-gray-800 shadow-sm"
+          ? "min-w-0 overflow-hidden rounded-xl border border-blue-100 bg-white text-gray-800 shadow-sm"
           : "min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-800 shadow-sm"
       }
     >
       <div
         className={
           isCorporateCharge
-            ? "border-b border-emerald-100 bg-emerald-50 px-3 py-2.5"
+            ? "border-b border-blue-100 bg-blue-50 px-3 py-2.5"
             : "border-b border-gray-200 bg-gray-50 px-3 py-2.5"
         }
       >
@@ -834,7 +834,7 @@ function renderTableRowCard(
         <p
           className={
             isCorporateCharge
-              ? "mt-0.5 min-w-0 break-words text-sm font-semibold leading-5 text-[#064E3B] [overflow-wrap:anywhere]"
+              ? "mt-0.5 min-w-0 break-words text-sm font-semibold leading-5 text-[#004C7D] [overflow-wrap:anywhere]"
               : "mt-0.5 min-w-0 break-words text-sm font-semibold leading-5 text-gray-900 [overflow-wrap:anywhere]"
           }
         >
@@ -1071,7 +1071,7 @@ function parseComplaintCellContent(text: string): ComplaintCellDetails {
 function renderComplaintContact(contact: ComplaintCellContact, index: number) {
   return (
     <div key={`${contact.name}-${index}`} className="min-w-0 px-3 py-3">
-      <p className="min-w-0 break-words text-sm font-semibold leading-5 text-[#005B43] [overflow-wrap:anywhere]">
+      <p className="min-w-0 break-words text-sm font-semibold leading-5 text-[#004C7D] [overflow-wrap:anywhere]">
         {contact.name}
       </p>
       <dl className="mt-2 min-w-0 space-y-1.5 text-xs leading-5">
@@ -2440,19 +2440,19 @@ export default function Chatbot() {
         disabled={isLoading}
         className={
           isMainAction
-            ? `${isWideMainAction ? "col-span-2" : ""} flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-full border border-[#006A4E]/45 bg-white px-2.5 py-2 text-center text-[11px] font-semibold leading-tight text-[#005B43] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#006A4E]/70 hover:bg-[#006A4E]/5 hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100`
+            ? `${isWideMainAction ? "col-span-2" : ""} flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-full border border-[#005B96]/40 bg-white px-2.5 py-2 text-center text-[11px] font-semibold leading-tight text-[#004C7D] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#FFC629]/80 hover:bg-[#FFF8D8] hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100`
             : isDistrictAction
-              ? "group flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-xl border border-[#006A4E]/20 bg-[#F5FBF8] px-3 py-2.5 text-left text-[13px] font-semibold leading-tight text-[#004D39] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#006A4E]/55 hover:bg-white hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
-            : "min-w-0 rounded-full border border-[#006A4E]/15 bg-white px-3 py-2 text-sm font-medium text-[#006A4E] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#006A4E]/5 hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+              ? "group flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-xl border border-[#005B96]/20 bg-[#F3F8FC] px-3 py-2.5 text-left text-[13px] font-semibold leading-tight text-[#004C7D] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#FFC629]/80 hover:bg-[#FFF8D8] hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+            : "min-w-0 rounded-full border border-[#005B96]/15 bg-white px-3 py-2 text-sm font-medium text-[#005B96] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#FFC629]/80 hover:bg-[#FFF8D8] hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
         }
       >
         {isMainAction ? (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#006A4E]">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#005B96]">
             <QuickActionIcon action={action} className="h-4 w-4" />
           </span>
         ) : null}
         {isDistrictAction ? (
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#006A4E] ring-1 ring-[#006A4E]/15 transition group-hover:bg-[#006A4E] group-hover:text-white">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#005B96] ring-1 ring-[#005B96]/15 transition group-hover:bg-[#FFC629] group-hover:text-[#123047]">
             <DistrictPinIcon />
           </span>
         ) : null}
@@ -2487,7 +2487,7 @@ export default function Chatbot() {
             type="button"
             onClick={handleScopedBackNavigation}
             disabled={isLoading}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#006A4E]/10 text-sm font-semibold leading-none text-[#006A4E] transition hover:bg-[#006A4E]/15 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#005B96]/10 text-sm font-semibold leading-none text-[#005B96] transition hover:bg-[#FFF8D8] hover:text-[#123047] disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Go back to previous options"
             title="Go back"
           >
@@ -2507,12 +2507,12 @@ export default function Chatbot() {
                 void sendMessage(action);
               }}
               disabled={isLoading}
-              className={`flex w-full min-w-0 items-center px-4 py-3 text-sm font-medium text-[#006A4E] transition duration-200 hover:bg-[#006A4E]/5 active:bg-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`flex w-full min-w-0 items-center px-4 py-3 text-sm font-medium text-[#005B96] transition duration-200 hover:bg-[#FFF8D8] active:bg-[#FFEFAF] disabled:cursor-not-allowed disabled:opacity-60 ${
                 isLocationAction ? "justify-start gap-3 text-left" : "justify-center text-center"
               }`}
             >
               {isLocationAction ? (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#006A4E]">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#005B96]">
                   <DistrictPinIcon className="h-4 w-4" />
                 </span>
               ) : null}
@@ -2544,8 +2544,8 @@ export default function Chatbot() {
         disabled={isSaving}
         className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
           isSelected
-            ? "border-[#006A4E] bg-[#006A4E] text-white"
-            : "border-[#006A4E]/20 bg-white text-[#006A4E] hover:bg-[#006A4E]/5"
+            ? "border-[#005B96] bg-[#005B96] text-white"
+            : "border-[#005B96]/20 bg-white text-[#005B96] hover:bg-[#005B96]/5"
         }`}
       >
         {label}
@@ -2569,7 +2569,7 @@ export default function Chatbot() {
           messageIndex,
         )}
         {message.feedbackStatus === "saved" ? (
-          <span className="text-xs font-medium text-[#006A4E]">Saved</span>
+          <span className="text-xs font-medium text-[#005B96]">Saved</span>
         ) : null}
         {message.feedbackStatus === "error" ? (
           <span className="text-xs font-medium text-red-600">
@@ -2595,8 +2595,8 @@ export default function Chatbot() {
     const feedbackButtonClass = (isSelected: boolean) =>
       `rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
         isSelected
-          ? "border-[#006A4E] bg-[#006A4E] text-white"
-          : "border-[#006A4E]/20 bg-white text-[#006A4E] hover:bg-[#006A4E]/5"
+          ? "border-[#005B96] bg-[#005B96] text-white"
+          : "border-[#005B96]/20 bg-white text-[#005B96] hover:bg-[#005B96]/5"
       }`;
 
     return (
@@ -2625,7 +2625,7 @@ export default function Chatbot() {
           Not helpful
         </button>
         {message.feedbackStatus === "saved" ? (
-          <span className="text-xs font-medium text-[#006A4E]">Saved</span>
+          <span className="text-xs font-medium text-[#005B96]">Saved</span>
         ) : null}
         {message.feedbackStatus === "error" ? (
           <span className="text-xs font-medium text-red-600">
@@ -2636,7 +2636,7 @@ export default function Chatbot() {
           type="button"
           onClick={handleShowMainMenu}
           disabled={isLoading}
-          className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+          className="rounded-full bg-[#005B96] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
         >
           Main menu
         </button>
@@ -2675,7 +2675,7 @@ export default function Chatbot() {
               }}
               disabled={isLoading}
               placeholder="Enter your full name"
-              className="w-full rounded-xl border border-[#C8D8DD] bg-[#F8FBFC] px-3 py-2.5 text-sm text-[#223A42] outline-none transition duration-200 placeholder:text-slate-400 focus:border-[#006A4E] focus:bg-white focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl border border-[#C8D8DD] bg-[#F8FBFC] px-3 py-2.5 text-sm text-[#223A42] outline-none transition duration-200 placeholder:text-slate-400 focus:border-[#005B96] focus:bg-white focus:ring-2 focus:ring-[#005B96]/10 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
 
@@ -2692,7 +2692,7 @@ export default function Chatbot() {
               }}
               disabled={isLoading}
               placeholder="017XXXXXXXX"
-              className="w-full rounded-xl border border-[#C8D8DD] bg-[#F8FBFC] px-3 py-2.5 text-sm text-[#223A42] outline-none transition duration-200 placeholder:text-slate-400 focus:border-[#006A4E] focus:bg-white focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl border border-[#C8D8DD] bg-[#F8FBFC] px-3 py-2.5 text-sm text-[#223A42] outline-none transition duration-200 placeholder:text-slate-400 focus:border-[#005B96] focus:bg-white focus:ring-2 focus:ring-[#005B96]/10 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
 
@@ -2705,7 +2705,7 @@ export default function Chatbot() {
           <button
             type="submit"
             disabled={isLoading}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[#006A4E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-[#005B96] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
           >
             Continue to Support
           </button>
@@ -2746,7 +2746,7 @@ export default function Chatbot() {
             <button
               type="button"
               onClick={() => handleShowPreviousProductMenu(previousProductMenu)}
-              className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98]"
+              className="rounded-full bg-[#005B96] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] active:scale-[0.98]"
             >
               View options
             </button>
@@ -2754,7 +2754,7 @@ export default function Chatbot() {
               type="button"
               onClick={handleShowMainMenu}
               disabled={isLoading}
-              className="rounded-full border border-[#006A4E]/20 bg-white px-3 py-1.5 text-xs font-semibold text-[#006A4E] transition duration-200 hover:-translate-y-0.5 hover:bg-[#006A4E]/5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+              className="rounded-full border border-[#005B96]/20 bg-white px-3 py-1.5 text-xs font-semibold text-[#005B96] transition duration-200 hover:-translate-y-0.5 hover:bg-[#005B96]/5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
             >
               Main menu
             </button>
@@ -2764,7 +2764,7 @@ export default function Chatbot() {
             type="button"
             onClick={handleShowMainMenu}
             disabled={isLoading}
-            className="rounded-full bg-[#006A4E] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+            className="rounded-full bg-[#005B96] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
           >
             Main menu
           </button>
@@ -2779,13 +2779,13 @@ export default function Chatbot() {
       aria-label="Eastern Bank PLC AI Assistant is typing"
       aria-live="polite"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#006A4E] bg-white">
-        <RobotIcon className="h-7 w-7 text-[#006A4E]" />
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#005B96] bg-white">
+        <RobotIcon className="h-7 w-7 text-[#005B96]" />
       </div>
       <div className="flex items-center gap-1 rounded-2xl bg-white px-3 py-3 shadow-sm">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#006A4E]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#006A4E] [animation-delay:120ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#006A4E] [animation-delay:240ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FFC629]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FFC629] [animation-delay:120ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FFC629] [animation-delay:240ms]" />
       </div>
     </div>
   );
@@ -2802,7 +2802,7 @@ export default function Chatbot() {
       aria-label="EBL Support Agent is typing"
       aria-live="polite"
     >
-      <p className="mb-1 ml-1 text-xs font-medium text-[#006A4E]">
+      <p className="mb-1 ml-1 text-xs font-medium text-[#005B96]">
         Eastern Bank PLC
       </p>
       <div className="inline-flex max-w-[88%] items-center gap-2 rounded-2xl border border-[#C8D8DD] bg-[#EEF4F6] px-4 py-3 text-sm font-medium leading-6 text-[#223A42] shadow-sm">
@@ -2958,11 +2958,11 @@ export default function Chatbot() {
 
           openChatbot();
         }}
-        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white p-1 text-white shadow-2xl shadow-[#006A4E]/30 ring-1 ring-[#006A4E]/20 transition duration-200 hover:-translate-y-0.5 hover:shadow-[#006A4E]/40 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#006A4E] sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
+        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#005B96] p-1 text-white shadow-2xl shadow-[#005B96]/30 ring-1 ring-[#005B96]/25 transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] hover:shadow-[#005B96]/40 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC629] sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
         aria-label={isOpen ? chatbotText.close : chatbotText.open}
       >
-        <span className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-[#008A68] to-[#00543E] shadow-inner">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#006A4E] sm:h-10 sm:w-10">
+        <span className="flex h-full w-full items-center justify-center rounded-full bg-[#FFC629] shadow-inner">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#005B96] sm:h-10 sm:w-10">
             <RobotIcon className="h-7 w-7 sm:h-8 sm:w-8" />
           </span>
         </span>
@@ -2981,20 +2981,20 @@ export default function Chatbot() {
           aria-hidden={isWidgetClosing}
         >
           <div
-            className="relative flex flex-col overflow-hidden rounded-[1.25rem] border border-[#006A4E]/10 bg-white shadow-2xl shadow-black/15 transition-[height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            className="relative flex flex-col overflow-hidden rounded-[1.25rem] border border-[#005B96]/10 bg-white shadow-2xl shadow-black/15 transition-[height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
               height: hasStartedConversation
                 ? "min(520px, calc(100dvh - 2rem))"
                 : "min(340px, calc(100dvh - 2rem))",
             }}
           >
-            <div className="flex shrink-0 items-center justify-between gap-3 bg-[#006A4E] px-4 py-3 text-white sm:px-5">
+            <div className="flex shrink-0 items-center justify-between gap-3 bg-[#005B96] px-4 py-3 text-white sm:px-5">
               <div className="flex min-w-0 items-center gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold sm:text-base">
                     {chatbotText.title}
                   </p>
-                  <p className="mt-1 text-sm text-emerald-100">
+                  <p className="mt-1 text-sm text-blue-100">
                     {chatbotText.status}
                   </p>
                 </div>
@@ -3069,7 +3069,7 @@ export default function Chatbot() {
                         style={{ animationDelay: `${Math.min(index, 4) * 18}ms` }}
                       >
                         {message.role === "bot" ? (
-                          <p className="mb-1 ml-1 text-xs font-medium text-[#006A4E]">
+                          <p className="mb-1 ml-1 text-xs font-medium text-[#005B96]">
                             Eastern Bank PLC
                           </p>
                         ) : null}
@@ -3084,8 +3084,8 @@ export default function Chatbot() {
                                 ? "border border-[#F0C84B] bg-[#FFF8D8] font-semibold text-[#4B3A00]"
                                 : isHumanSupportBotMessage
                                   ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
-                                : "bg-[#006A4E] text-white"
-                              : "ml-auto bg-gray-100 text-gray-700"
+                                : "bg-[#005B96] text-white"
+                              : "ml-auto border border-[#B8D4E8] bg-[#EAF3FA] text-[#123047]"
                           }`}
                         >
                           {isComplaintCellMessage
@@ -3148,13 +3148,13 @@ export default function Chatbot() {
                     }
                     aria-label={chatbotText.placeholder}
                     disabled={isLoading || humanSupportStep === "details"}
-                    className="min-w-0 flex-1 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition duration-200 focus:border-[#006A4E] focus:ring-2 focus:ring-[#006A4E]/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-w-0 flex-1 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition duration-200 focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10 disabled:cursor-not-allowed disabled:opacity-60"
                   />
 
                   <button
                     type="submit"
                     disabled={isLoading || humanSupportStep === "details"}
-                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#006A4E] text-white shadow-lg shadow-[#006A4E]/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#00543E] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#005B96] text-white shadow-lg shadow-[#005B96]/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
                     aria-label={chatbotText.send}
                   >
                     <SendIcon />
@@ -3164,13 +3164,13 @@ export default function Chatbot() {
             ) : (
               <div
                 key="intro-view"
-                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col justify-center bg-[#007A5A] px-4 pb-5 pt-6 text-white sm:px-5`}
+                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col justify-center bg-[#005B96] px-4 pb-5 pt-6 text-white sm:px-5`}
               >
                 <div className="space-y-3">
                   <p className="text-3xl font-bold leading-tight">
                     {chatbotText.introTitle}
                   </p>
-                  <p className="max-w-[280px] text-sm leading-6 text-emerald-50">
+                  <p className="max-w-[280px] text-sm leading-6 text-blue-50">
                     {chatbotText.introDescription}
                   </p>
                 </div>
@@ -3190,7 +3190,7 @@ export default function Chatbot() {
                   </span>
                   <span
                     aria-hidden="true"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#006A4E] text-white shadow-md shadow-[#006A4E]/20"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#005B96] text-white shadow-md shadow-[#005B96]/20"
                   >
                     <SendIcon className="h-4 w-4" />
                   </span>
@@ -3216,7 +3216,7 @@ export default function Chatbot() {
                     <button
                       type="button"
                       onClick={handleConfirmEndSession}
-                      className="flex-1 rounded-full bg-[#006A4E] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#00543E]"
+                      className="flex-1 rounded-full bg-[#005B96] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#004C7D]"
                     >
                       End
                     </button>
