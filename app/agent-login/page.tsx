@@ -61,7 +61,8 @@ export default function AgentLoginPage() {
 
     try {
       const data = await loginAgent(email.trim(), password);
-      window.localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(data.agent));
+      window.localStorage.removeItem(AGENT_STORAGE_KEY);
+      window.sessionStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(data.agent));
       router.replace("/agent-dashboard");
     } catch (currentError) {
       setError(currentError instanceof Error ? currentError.message : "Unable to sign in.");

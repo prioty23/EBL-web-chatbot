@@ -420,7 +420,7 @@ function AgentWorkBar({
   onLogout: () => void | Promise<void>;
 }) {
   return (
-    <section className="agent-dashboard-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[8px] border border-[#D6E5E0] bg-white shadow-sm">
+    <section className="agent-dashboard-card flex min-h-[360px] flex-col overflow-hidden rounded-[8px] border border-[#D6E5E0] bg-white shadow-sm xl:min-h-0 xl:flex-1">
       <div className="border-b border-[#E5EFEC] bg-[linear-gradient(180deg,#F8FBFA_0%,#FFFFFF_100%)] px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7C8A86]">
           Agent Information
@@ -610,7 +610,8 @@ export default function AgentDashboardPage() {
 
     const authCheckTimer = window.setTimeout(() => {
       const verifyStoredAgent = async () => {
-        const storedAgent = window.localStorage.getItem(AGENT_STORAGE_KEY);
+        window.localStorage.removeItem(AGENT_STORAGE_KEY);
+        const storedAgent = window.sessionStorage.getItem(AGENT_STORAGE_KEY);
 
         if (!storedAgent) {
           if (!isCancelled) {
@@ -624,7 +625,7 @@ export default function AgentDashboardPage() {
           const parsedAgent = JSON.parse(storedAgent) as AgentProfile;
 
           if (!parsedAgent?.agent_id || !parsedAgent?.name) {
-            window.localStorage.removeItem(AGENT_STORAGE_KEY);
+            window.sessionStorage.removeItem(AGENT_STORAGE_KEY);
             router.replace("/agent-login");
             return;
           }
@@ -639,9 +640,9 @@ export default function AgentDashboardPage() {
 
           setAgentProfile(data.agent);
           setIsAgentAvailable(data.agent.is_available);
-          window.localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(data.agent));
+          window.sessionStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(data.agent));
         } catch {
-          window.localStorage.removeItem(AGENT_STORAGE_KEY);
+          window.sessionStorage.removeItem(AGENT_STORAGE_KEY);
           router.replace("/agent-login");
         } finally {
           if (!isCancelled) {
@@ -694,7 +695,7 @@ export default function AgentDashboardPage() {
       if (agentData?.agent) {
         setAgentProfile(agentData.agent);
         setIsAgentAvailable(agentData.agent.is_available);
-        window.localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agentData.agent));
+        window.sessionStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agentData.agent));
       }
 
       setWaitingSessions(waitingData.sessions);
@@ -883,7 +884,7 @@ export default function AgentDashboardPage() {
 
       setAgentProfile(data.agent);
       setIsAgentAvailable(data.agent.is_available);
-      window.localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(data.agent));
+      window.sessionStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(data.agent));
     } catch (currentError) {
       setError(
         currentError instanceof Error
@@ -918,6 +919,7 @@ export default function AgentDashboardPage() {
     }
 
     window.localStorage.removeItem(AGENT_STORAGE_KEY);
+    window.sessionStorage.removeItem(AGENT_STORAGE_KEY);
     setAgentProfile(null);
     setWaitingSessions([]);
     setSelectedSession(null);
@@ -1005,9 +1007,9 @@ export default function AgentDashboardPage() {
         }
       `}</style>
 
-      <main className="flex h-screen flex-col overflow-hidden bg-[#F4F7F6] text-[#10231D]">
-        <header className="bg-gradient-to-r from-[#004A7C] via-[#005B96] to-[#003F68] px-4 py-3 text-white shadow-lg shadow-[#005B96]/20 sm:px-6 lg:px-8">
-          <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <main className="flex min-h-screen flex-col bg-[#F4F7F6] text-[#10231D] lg:h-screen lg:overflow-hidden">
+        <header className="shrink-0 bg-gradient-to-r from-[#004A7C] via-[#005B96] to-[#003F68] px-4 py-3 text-white shadow-lg shadow-[#005B96]/20 sm:px-6 lg:px-8">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden">
                 <Image
@@ -1032,7 +1034,7 @@ export default function AgentDashboardPage() {
           </div>
         </header>
 
-        <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-5 overflow-hidden px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-visible px-3 py-4 sm:px-5 lg:min-h-0 lg:gap-5 lg:overflow-hidden lg:px-6 xl:px-8">
           {(error || notice) && (
             <section
               className={classNames(
@@ -1046,10 +1048,10 @@ export default function AgentDashboardPage() {
             </section>
           )}
 
-          <section className="grid min-h-0 flex-1 gap-5 overflow-hidden xl:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="flex min-h-0 min-w-0 flex-col gap-5 overflow-hidden">
-              <section className="grid min-h-0 flex-1 gap-5 overflow-hidden lg:grid-cols-[330px_minmax(0,1fr)]">
-                <div className="flex min-h-0 flex-col gap-5 overflow-hidden">
+          <section className="grid flex-1 gap-5 lg:min-h-0 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
+            <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:overflow-hidden">
+              <section className="grid flex-1 gap-5 lg:min-h-0 lg:grid-cols-[minmax(280px,330px)_minmax(0,1fr)] lg:overflow-hidden">
+                <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:overflow-hidden">
                   <ChatHistoryPanel
                     sessions={historySessions}
                     isOpen={isHistoryOpen}
@@ -1057,7 +1059,7 @@ export default function AgentDashboardPage() {
                     onToggle={() => setIsHistoryOpen((currentState) => !currentState)}
                     onSelectSession={selectHistorySession}
                   />
-                  <aside className="agent-dashboard-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
+                  <aside className="agent-dashboard-card flex min-h-[260px] max-h-[420px] flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm lg:min-h-0 lg:max-h-none lg:flex-1">
                   <div className="flex items-center justify-between border-b border-[#E5EFEC] bg-white px-5 py-4">
                     <div className="min-w-0">
                       <h2 className="text-base font-bold text-[#10231D]">Queue</h2>
@@ -1141,9 +1143,9 @@ export default function AgentDashboardPage() {
                   </aside>
                 </div>
 
-                <div className="flex min-h-0 min-w-0 flex-col gap-5 overflow-hidden">
+                <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:overflow-hidden">
                   <CustomerDetailsSummary session={customerForSummary} />
-                  <section className="agent-dashboard-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
+                  <section className="agent-dashboard-card flex min-h-[520px] min-w-0 flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm lg:min-h-0 lg:flex-1">
               {selectedSession ? (
                 <>
                   <div className="flex flex-col gap-3 border-b border-[#E5EFEC] bg-white px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1181,7 +1183,7 @@ export default function AgentDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[linear-gradient(180deg,#F8FBFA_0%,#FFFFFF_100%)] px-4 py-5">
+                  <div className="min-h-[320px] flex-1 space-y-4 overflow-y-auto bg-[linear-gradient(180deg,#F8FBFA_0%,#FFFFFF_100%)] px-4 py-5 lg:min-h-0">
                     {messages.length === 0 ? (
                       <div className="mx-auto mt-10 max-w-md rounded-[8px] border border-dashed border-[#D1DFDB] bg-white px-5 py-8 text-center text-sm leading-6 text-[#667570] shadow-sm">
                         {selectedSession.status === "active"
@@ -1290,7 +1292,7 @@ export default function AgentDashboardPage() {
               </section>
             </div>
 
-            <aside className="flex min-h-0 flex-col overflow-hidden">
+            <aside className="flex min-w-0 flex-col xl:min-h-0 xl:overflow-hidden">
               <AgentWorkBar
                 agentName={currentAgentName}
                 agentEmail={currentAgentEmail}
