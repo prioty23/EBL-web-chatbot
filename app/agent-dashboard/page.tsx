@@ -114,23 +114,29 @@ function formatWaitTime(value: string) {
   const parsedDate = parseBackendDate(value);
 
   if (!parsedDate) {
-    return "Waiting";
+    return "Recently requested";
   }
 
   const minutes = Math.max(0, Math.floor((Date.now() - parsedDate.getTime()) / 60000));
 
   if (minutes < 1) {
-    return "Waiting now";
+    return "Just now";
   }
 
   if (minutes < 60) {
-    return `Waiting ${minutes} min`;
+    return `${minutes} ${minutes === 1 ? "min" : "mins"} ago`;
   }
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
 
-  return `Waiting ${hours}h ${remainingMinutes}m`;
+  if (remainingMinutes === 0) {
+    return `${hours} ${hours === 1 ? "hr" : "hrs"} ago`;
+  }
+
+  return `${hours} ${hours === 1 ? "hr" : "hrs"} ${remainingMinutes} ${
+    remainingMinutes === 1 ? "min" : "mins"
+  } ago`;
 }
 
 function getInitials(name: string) {
@@ -1048,10 +1054,10 @@ export default function AgentDashboardPage() {
             </section>
           )}
 
-          <section className="grid flex-1 gap-5 lg:min-h-0 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
-            <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:overflow-hidden">
-              <section className="grid flex-1 gap-5 lg:min-h-0 lg:grid-cols-[minmax(280px,330px)_minmax(0,1fr)] lg:overflow-hidden">
-                <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:overflow-hidden">
+          <section className="grid flex-1 gap-5 lg:min-h-0 lg:overflow-hidden xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
+            <div className="order-2 flex min-w-0 flex-col gap-5 lg:min-h-0 lg:overflow-hidden xl:order-2">
+              <section className="grid flex-1 gap-5 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(280px,330px)] lg:overflow-hidden">
+                <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:order-2 lg:overflow-hidden">
                   <ChatHistoryPanel
                     sessions={historySessions}
                     isOpen={isHistoryOpen}
@@ -1143,7 +1149,7 @@ export default function AgentDashboardPage() {
                   </aside>
                 </div>
 
-                <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:overflow-hidden">
+                <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:order-1 lg:overflow-hidden">
                   <CustomerDetailsSummary session={customerForSummary} />
                   <section className="agent-dashboard-card flex min-h-[520px] min-w-0 flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm lg:min-h-0 lg:flex-1">
               {selectedSession ? (
@@ -1292,7 +1298,7 @@ export default function AgentDashboardPage() {
               </section>
             </div>
 
-            <aside className="flex min-w-0 flex-col xl:min-h-0 xl:overflow-hidden">
+            <aside className="order-1 flex min-w-0 flex-col xl:min-h-0 xl:overflow-hidden">
               <AgentWorkBar
                 agentName={currentAgentName}
                 agentEmail={currentAgentEmail}

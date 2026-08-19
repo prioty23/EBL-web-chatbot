@@ -295,12 +295,16 @@ MAIN_QUICK_ACTIONS = [
     "Open an Account",
     "Loan Information",
     "Card Information",
-    "Complaint Cell",
     "Schedule of Charges",
     "Interest Rate",
-    "Contact Us",
     "Locate Us",
+    "Support",
+]
+SUPPORT_MENU_REPLY = "Which support service do you need?"
+SUPPORT_QUICK_ACTIONS = [
     "Human Support",
+    "Complaint Cell",
+    "Contact Us",
 ]
 SCHEDULE_CHARGE_QUICK_ACTIONS = [
     "Retail Charges",
@@ -2978,6 +2982,9 @@ def assistant_prompt_domain(reply):
     if reply == BRANCH_DISTRICT_MENU_REPLY:
         return "branch_district"
 
+    if reply == SUPPORT_MENU_REPLY:
+        return "support"
+
     if is_branch_area_prompt(reply):
         return "branch_locator"
 
@@ -3031,6 +3038,9 @@ BRANCH_BACK_DOMAINS = {
     "branch_district",
     "branch_locator",
 }
+SUPPORT_BACK_DOMAINS = {
+    "support",
+}
 SCOPED_BACK_DOMAINS = (
     SCHEDULE_BACK_DOMAINS
     | INTEREST_BACK_DOMAINS
@@ -3038,6 +3048,7 @@ SCOPED_BACK_DOMAINS = (
     | ACCOUNT_BACK_DOMAINS
     | LOAN_BACK_DOMAINS
     | BRANCH_BACK_DOMAINS
+    | SUPPORT_BACK_DOMAINS
 )
 
 
@@ -3060,6 +3071,9 @@ def scoped_back_family(domain):
     if domain in BRANCH_BACK_DOMAINS:
         return "branch"
 
+    if domain in SUPPORT_BACK_DOMAINS:
+        return "support"
+
     return ""
 
 
@@ -3079,6 +3093,7 @@ def source_for_prompt_domain(domain):
         "loan": "loan-router",
         "branch_district": "branch-locator-agent",
         "branch_locator": "branch-locator-agent",
+        "support": "support-router",
     }.get(domain, "greeting-handler")
 
 
@@ -3131,7 +3146,7 @@ def record_scoped_navigation_prompt(session_id, reply, source, quick_actions):
     if domain not in SCOPED_BACK_DOMAINS:
         return
 
-    if domain in {"schedule_charges", "interest_rate", "branch_district"}:
+    if domain in {"schedule_charges", "interest_rate", "branch_district", "support"}:
         base_state = stack[0] if stack and stack[0]["domain"] == "main_menu" else main_menu_navigation_state()
         SCOPED_NAVIGATION_STACKS[session_id] = [base_state, state]
         return
@@ -4268,6 +4283,18 @@ def build_top_level_menu_response(message):
         return {
             "reply": INTEREST_RATE_TYPE_REPLY,
             "source": "interest-rate-router",
+            "status": "answered",
+        }
+
+    if normalized_message in {
+        "support",
+        "help support",
+        "help & support",
+        "help and support",
+    }:
+        return {
+            "reply": SUPPORT_MENU_REPLY,
+            "source": "support-router",
             "status": "answered",
         }
 
@@ -7309,6 +7336,9 @@ def build_quick_actions(reply, source):
 
     if source in {"greeting-handler", "identity-handler"}:
         return MAIN_QUICK_ACTIONS
+
+    if reply == SUPPORT_MENU_REPLY:
+        return SUPPORT_QUICK_ACTIONS
 
     if reply == SCHEDULE_CHARGES_MENU_REPLY:
         return SCHEDULE_CHARGE_QUICK_ACTIONS

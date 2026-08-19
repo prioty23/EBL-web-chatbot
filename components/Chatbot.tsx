@@ -7,6 +7,7 @@ import type { ChangeEvent, FormEvent, ReactNode } from "react";
 type Message = {
   role: "bot" | "user";
   text: string;
+  menuOnly?: boolean;
   source?: string;
   quickActions?: string[];
   chatId?: number;
@@ -122,16 +123,15 @@ const LIVE_CHAT_MESSAGE_POLL_MS = 2500;
 const LIVE_CHAT_TYPING_SIGNAL_MS = 1500;
 const LIVE_CHAT_TYPING_IDLE_MS = 3000;
 const LIVE_CHAT_BUSY_NOTICE_MS = 180000;
+const SUPPORT_ACTION = "Support";
 const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
   "Card Information",
-  "Complaint Cell",
   "Schedule of Charges",
   "Interest Rate",
-  "Contact Us",
   "Locate Us",
-  HUMAN_SUPPORT_ACTION,
+  SUPPORT_ACTION,
 ];
 const DISTRICT_QUICK_ACTIONS = [
   "Dhaka Division",
@@ -217,6 +217,7 @@ const CARD_INFORMATION_MENU_SOURCES = new Set(["card-router"]);
 const ACCOUNT_MENU_SOURCES = new Set(["account-router"]);
 const LOAN_MENU_SOURCES = new Set(["loan-router"]);
 const BRANCH_LOCATOR_MENU_SOURCES = new Set(["branch-locator-agent"]);
+const SUPPORT_MENU_SOURCES = new Set(["support-router"]);
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -305,6 +306,26 @@ function MinimizeIcon({ className = "h-5 w-5" }: { className?: string }) {
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ClockIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+    >
+      <circle cx="12" cy="12" r="8.25" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 7.75v4.75l3 1.75"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -550,6 +571,37 @@ function QuickActionIcon({
         />
         <path
           d="M5 12v2.5A1.5 1.5 0 0 0 6.5 16H8v-5H6.5A1.5 1.5 0 0 0 5 12.5M19 12v2.5a1.5 1.5 0 0 1-1.5 1.5H16v-5h1.5A1.5 1.5 0 0 1 19 12.5M12 18h3"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    normalizedAction === "support" ||
+    normalizedAction === "help support" ||
+    normalizedAction === "help & support" ||
+    normalizedAction === "help and support"
+  ) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M5.75 11.5a6.25 6.25 0 0 1 12.5 0v2.75A3.75 3.75 0 0 1 14.5 18H13"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M5.75 11.75v2a1.5 1.5 0 0 0 1.5 1.5h1v-5h-1a1.5 1.5 0 0 0-1.5 1.5ZM18.25 11.75v2a1.5 1.5 0 0 1-1.5 1.5h-1v-5h1a1.5 1.5 0 0 1 1.5 1.5ZM11.5 18h1.5"
           stroke="currentColor"
           strokeWidth="1.8"
           strokeLinecap="round"
@@ -1252,6 +1304,10 @@ function hasAnyAction(actions: string[] | undefined, expectedActions: string[]) 
   return expectedActions.some((action) => actionSet.has(action.toLowerCase()));
 }
 
+function normalizeQuickAction(action: string) {
+  return action.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function isMainMenuQuickAction(action: string) {
   return MAIN_MENU_QUICK_ACTIONS.some(
     (mainAction) => mainAction.toLowerCase() === action.toLowerCase(),
@@ -1417,6 +1473,21 @@ function isBranchLocatorOptionText(text: string, actions?: string[]) {
   );
 }
 
+function isSupportOptionText(text: string, actions?: string[]) {
+  return (
+    text.toLowerCase().includes("which support service do you need") &&
+    hasAnyAction(actions, [HUMAN_SUPPORT_ACTION, "Complaint Cell", "Contact Us"])
+  );
+}
+
+function isSupportQuickAction(action: string) {
+  const normalizedAction = normalizeQuickAction(action);
+
+  return ["human support", "complaint cell", "contact us"].includes(
+    normalizedAction,
+  );
+}
+
 function isScopedOptionMenuMessage(message: Message | null) {
   if (!message || message.role !== "bot" || !message.quickActions?.length) {
     return false;
@@ -1429,12 +1500,14 @@ function isScopedOptionMenuMessage(message: Message | null) {
     hasMenuSource(message, ACCOUNT_MENU_SOURCES) ||
     hasMenuSource(message, LOAN_MENU_SOURCES) ||
     hasMenuSource(message, BRANCH_LOCATOR_MENU_SOURCES) ||
+    hasMenuSource(message, SUPPORT_MENU_SOURCES) ||
     isScheduleChargeOptionText(message.text, message.quickActions) ||
     isInterestRateOptionText(message.text, message.quickActions) ||
     isCardInformationOptionText(message.text, message.quickActions) ||
     isAccountOptionText(message.text, message.quickActions) ||
     isLoanOptionText(message.text, message.quickActions) ||
-    isBranchLocatorOptionText(message.text, message.quickActions)
+    isBranchLocatorOptionText(message.text, message.quickActions) ||
+    isSupportOptionText(message.text, message.quickActions)
   );
 }
 
@@ -2132,7 +2205,8 @@ export default function Chatbot() {
       ...chatWithUserMessage,
       {
         role: "bot",
-        text: chatbotText.welcome,
+        text: "",
+        menuOnly: true,
         source: "greeting-handler",
         quickActions: MAIN_MENU_QUICK_ACTIONS,
       },
@@ -2404,39 +2478,41 @@ export default function Chatbot() {
     }
   };
 
+  const handleQuickActionClick = (action: string) => {
+    if (action === HUMAN_SUPPORT_ACTION) {
+      void requestHumanSupport();
+      return;
+    }
+
+    if (
+      action === HUMAN_SUPPORT_CONFIRM_ACTION &&
+      humanSupportStep === "confirm"
+    ) {
+      void confirmHumanSupport();
+      return;
+    }
+
+    if (
+      action === HUMAN_SUPPORT_DECLINE_ACTION &&
+      humanSupportStep === "confirm"
+    ) {
+      void declineHumanSupport();
+      return;
+    }
+
+    void sendMessage(action);
+  };
+
   const renderQuickActionButton = (action: string) => {
     const isMainAction = isMainMenuQuickAction(action);
     const isDistrictAction = isDistrictQuickAction(action);
-    const isWideMainAction = isMainAction && action === HUMAN_SUPPORT_ACTION;
+    const isWideMainAction = isMainAction && action === SUPPORT_ACTION;
 
     return (
       <button
         key={action}
         type="button"
-        onClick={() => {
-          if (action === HUMAN_SUPPORT_ACTION) {
-            void requestHumanSupport();
-            return;
-          }
-
-          if (
-            action === HUMAN_SUPPORT_CONFIRM_ACTION &&
-            humanSupportStep === "confirm"
-          ) {
-            void confirmHumanSupport();
-            return;
-          }
-
-          if (
-            action === HUMAN_SUPPORT_DECLINE_ACTION &&
-            humanSupportStep === "confirm"
-          ) {
-            void declineHumanSupport();
-            return;
-          }
-
-          void sendMessage(action);
-        }}
+        onClick={() => handleQuickActionClick(action)}
         disabled={isLoading}
         className={
           isMainAction
@@ -2498,22 +2574,27 @@ export default function Chatbot() {
       <div className="divide-y divide-gray-200">
         {actions.map((action) => {
           const isLocationAction = isLocationQuickAction(action);
+          const isSupportAction = isSupportQuickAction(action);
+          const hasLeadingIcon = isLocationAction || isSupportAction;
 
           return (
             <button
               key={action}
               type="button"
-              onClick={() => {
-                void sendMessage(action);
-              }}
+              onClick={() => handleQuickActionClick(action)}
               disabled={isLoading}
               className={`flex w-full min-w-0 items-center px-4 py-3 text-sm font-medium text-[#005B96] transition duration-200 hover:bg-[#FFF8D8] active:bg-[#FFEFAF] disabled:cursor-not-allowed disabled:opacity-60 ${
-                isLocationAction ? "justify-start gap-3 text-left" : "justify-center text-center"
+                hasLeadingIcon ? "justify-start gap-3 text-left" : "justify-center text-center"
               }`}
             >
               {isLocationAction ? (
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#005B96]">
                   <DistrictPinIcon className="h-4 w-4" />
+                </span>
+              ) : null}
+              {isSupportAction ? (
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#005B96]">
+                  <QuickActionIcon action={action} className="h-4 w-4" />
                 </span>
               ) : null}
               <span className="block min-w-0 break-words [overflow-wrap:anywhere]">
@@ -2958,12 +3039,12 @@ export default function Chatbot() {
 
           openChatbot();
         }}
-        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#005B96] p-1 text-white shadow-2xl shadow-[#005B96]/30 ring-1 ring-[#005B96]/25 transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] hover:shadow-[#005B96]/40 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC629] sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
+        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#FFC629] p-1 text-white shadow-2xl shadow-[#005B96]/30 ring-2 ring-[#005B96]/40 transition duration-200 hover:-translate-y-0.5 hover:bg-[#F4BC20] hover:shadow-[#005B96]/40 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#005B96] sm:bottom-6 sm:right-6 sm:h-16 sm:w-16 sm:p-1.5"
         aria-label={isOpen ? chatbotText.close : chatbotText.open}
       >
-        <span className="flex h-full w-full items-center justify-center rounded-full bg-[#FFC629] shadow-inner">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#005B96] sm:h-10 sm:w-10">
-            <RobotIcon className="h-7 w-7 sm:h-8 sm:w-8" />
+        <span className="flex h-full w-full items-center justify-center rounded-full bg-[#005B96] p-1.5 transition group-hover:bg-[#004C7D]">
+          <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-[#005B96] shadow-inner transition group-hover:bg-[#FFF8D8]">
+            <RobotIcon className="h-7 w-7 text-[#005B96] sm:h-8 sm:w-8" />
           </span>
         </span>
         <span className="pointer-events-none absolute bottom-full right-0 mb-3 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -3061,6 +3142,8 @@ export default function Chatbot() {
                       isHumanSupportMessage(message);
                     const isHumanSupportEndedBotMessage =
                       isHumanSupportEndedMessage(message);
+                    const isMenuOnlyMessage =
+                      message.role === "bot" && message.menuOnly;
 
                     return (
                       <div
@@ -3068,30 +3151,32 @@ export default function Chatbot() {
                         className="animate-ebl-message-in"
                         style={{ animationDelay: `${Math.min(index, 4) * 18}ms` }}
                       >
-                        {message.role === "bot" ? (
+                        {message.role === "bot" && !isMenuOnlyMessage ? (
                           <p className="mb-1 ml-1 text-xs font-medium text-[#005B96]">
                             Eastern Bank PLC
                           </p>
                         ) : null}
-                        <div
-                          className={`${
-                            isCorporateTableMessage || isComplaintCellMessage
-                              ? "max-w-full rounded-xl px-2.5 py-2.5"
-                              : "max-w-[88%] rounded-2xl px-4 py-3"
-                          } min-w-0 break-words text-sm leading-6 shadow-sm [overflow-wrap:anywhere] ${
-                            message.role === "bot"
-                              ? isHumanSupportEndedBotMessage
-                                ? "border border-[#F0C84B] bg-[#FFF8D8] font-semibold text-[#4B3A00]"
-                                : isHumanSupportBotMessage
-                                  ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
-                                : "bg-[#005B96] text-white"
-                              : "ml-auto border border-[#B8D4E8] bg-[#EAF3FA] text-[#123047]"
-                          }`}
-                        >
-                          {isComplaintCellMessage
-                            ? renderComplaintCellContent(message.text)
-                            : renderMessageContent(message.text)}
-                        </div>
+                        {!isMenuOnlyMessage ? (
+                          <div
+                            className={`${
+                              isCorporateTableMessage || isComplaintCellMessage
+                                ? "max-w-full rounded-xl px-2.5 py-2.5"
+                                : "max-w-[88%] rounded-2xl px-4 py-3"
+                            } min-w-0 break-words text-sm leading-6 shadow-sm [overflow-wrap:anywhere] ${
+                              message.role === "bot"
+                                ? isHumanSupportEndedBotMessage
+                                  ? "border border-[#F0C84B] bg-[#FFF8D8] font-semibold text-[#4B3A00]"
+                                  : isHumanSupportBotMessage
+                                    ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
+                                    : "bg-[#005B96] text-white"
+                                : "ml-auto border border-[#B8D4E8] bg-[#EAF3FA] text-[#123047]"
+                            }`}
+                          >
+                            {isComplaintCellMessage
+                              ? renderComplaintCellContent(message.text)
+                              : renderMessageContent(message.text)}
+                          </div>
+                        ) : null}
                         {renderHumanSupportDetailsForm(message, index)}
                         {renderFeedbackControls(message, index)}
                         {renderLiveChatEndedControls(message, index)}
@@ -3164,13 +3249,13 @@ export default function Chatbot() {
             ) : (
               <div
                 key="intro-view"
-                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col justify-center bg-[#005B96] px-4 pb-5 pt-6 text-white sm:px-5`}
+                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col bg-[#F6FAFC] px-4 pb-5 pt-5 text-[#123047] sm:px-5`}
               >
-                <div className="space-y-3">
-                  <p className="text-3xl font-bold leading-tight">
+                <div className="rounded-2xl border border-[#D7E5EC] bg-white px-4 py-4 shadow-sm">
+                  <p className="text-2xl font-bold leading-tight text-[#005B96]">
                     {chatbotText.introTitle}
                   </p>
-                  <p className="max-w-[280px] text-sm leading-6 text-blue-50">
+                  <p className="mt-3 max-w-[280px] text-sm leading-6 text-[#435867]">
                     {chatbotText.introDescription}
                   </p>
                 </div>
@@ -3178,19 +3263,20 @@ export default function Chatbot() {
                 <button
                   type="button"
                   onClick={handleStartConversation}
-                  className="mt-7 flex w-full items-center justify-between rounded-xl border border-white/70 bg-white px-4 py-4 text-left text-gray-900 shadow-[0_14px_30px_rgba(0,0,0,0.12)] transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(0,0,0,0.16)] active:scale-[0.985]"
+                  className="group mt-4 flex w-full items-center justify-between rounded-2xl border border-[#D7E5EC] bg-white px-4 py-4 text-left text-[#123047] shadow-sm transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-[#FFC629] hover:shadow-[0_14px_28px_rgba(0,91,150,0.14)] active:scale-[0.985]"
                 >
                   <span>
                     <span className="block text-base font-semibold">
                       {chatbotText.startConversation}
                     </span>
-                    <span className="mt-1 block text-sm text-gray-500">
+                    <span className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-[#697B89]">
+                      <ClockIcon className="h-3.5 w-3.5 shrink-0 text-[#005B96]" />
                       {chatbotText.responseTime}
                     </span>
                   </span>
                   <span
                     aria-hidden="true"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#005B96] text-white shadow-md shadow-[#005B96]/20"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#FFC629] text-[#123047] shadow-md shadow-[#FFC629]/30 transition duration-200 group-hover:bg-[#F4BC20]"
                   >
                     <SendIcon className="h-4 w-4" />
                   </span>

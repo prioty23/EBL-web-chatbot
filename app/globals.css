@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --primary: #006a4e;
-  --secondary: #e31b23;
+  --primary: #005b96;
+  --secondary: #ffc629;
   --dark: #111827;
   --light: #f8fafc;
   --background: var(--light);
@@ -40,11 +40,11 @@ body {
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-full bg-[#006A4E] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#00543E];
+    @apply inline-flex items-center justify-center rounded-full bg-[#005B96] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#004C7D];
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-full border border-[#006A4E] px-6 py-3 text-sm font-semibold text-[#006A4E] transition hover:bg-[#006A4E] hover:text-white;
+    @apply inline-flex items-center justify-center rounded-full border border-[#005B96] px-6 py-3 text-sm font-semibold text-[#005B96] transition hover:bg-[#005B96] hover:text-white;
   }
 
   .card {
