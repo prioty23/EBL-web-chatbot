@@ -85,6 +85,13 @@ type ComplaintCellDetails = {
   sections: ComplaintCellSection[];
 };
 
+type OngoingOffer = {
+  title: string;
+  description: string;
+  image: string;
+  details: string;
+};
+
 const chatbotText = translations.en.chatbot;
 const CHATBOT_API_URL = "http://127.0.0.1:8000/chat";
 const CHATBOT_FEEDBACK_API_URL = "http://127.0.0.1:8000/chat/feedback";
@@ -128,10 +135,11 @@ const MAIN_MENU_QUICK_ACTIONS = [
   "Open an Account",
   "Loan Information",
   "Card Information",
+  "Ongoing Offer",
   "Schedule of Charges",
   "Interest Rate",
-  "Locate Us",
   SUPPORT_ACTION,
+  "Locate Us",
 ];
 const DISTRICT_QUICK_ACTIONS = [
   "Dhaka Division",
@@ -218,6 +226,8 @@ const ACCOUNT_MENU_SOURCES = new Set(["account-router"]);
 const LOAN_MENU_SOURCES = new Set(["loan-router"]);
 const BRANCH_LOCATOR_MENU_SOURCES = new Set(["branch-locator-agent"]);
 const SUPPORT_MENU_SOURCES = new Set(["support-router"]);
+const CAMPAIGN_MENU_SOURCES = new Set(["campaign-router"]);
+const ONGOING_OFFERS_MESSAGE_SOURCES = new Set(["ongoing-offers-agent"]);
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -529,6 +539,34 @@ function QuickActionIcon({
     );
   }
 
+  if (
+    normalizedAction.includes("offer") ||
+    normalizedAction.includes("campaign")
+  ) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className}
+        fill="none"
+      >
+        <path
+          d="M5 7.5A2.5 2.5 0 0 1 7.5 5h4.25c.66 0 1.3.26 1.77.73l5 5a2.5 2.5 0 0 1 0 3.54l-4.25 4.25a2.5 2.5 0 0 1-3.54 0l-5-5A2.5 2.5 0 0 1 5 11.75V7.5Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 9h.01M9 15l6-6"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
   if (normalizedAction.includes("complaint")) {
     return (
       <svg
@@ -672,6 +710,10 @@ function getReadableLinkLabel(url: string) {
 
     if (pathname.includes("schedule")) {
       return "View schedule";
+    }
+
+    if (pathname.includes("whats-new")) {
+      return "Offer Details";
     }
 
     if (hostname.includes("ebl.com.bd")) {
@@ -958,6 +1000,240 @@ function renderSourceMetadataBlock(sourceLine: string, updatedLine: string, key:
         <span>Last updated: </span>
         <span>{formatMessage(updatedText)}</span>
       </p>
+    </div>
+  );
+}
+
+function parseOngoingOffersContent(text: string) {
+  const blocks = text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const offers: OngoingOffer[] = [];
+
+  for (const block of blocks) {
+    if (!/^offer:/i.test(block)) {
+      continue;
+    }
+
+    const lines = block.split(/\r?\n/).map((line) => line.trim());
+    const offer: OngoingOffer = {
+      title: "",
+      description: "",
+      image: "",
+      details: "",
+    };
+
+    for (const line of lines) {
+      if (/^title:/i.test(line)) {
+        offer.title = line.replace(/^title:\s*/i, "").trim();
+      }
+
+      if (/^description:/i.test(line)) {
+        offer.description = line.replace(/^description:\s*/i, "").trim();
+      }
+
+      if (/^image:/i.test(line)) {
+        offer.image = line.replace(/^image:\s*/i, "").trim();
+      }
+
+      if (/^details:/i.test(line)) {
+        offer.details = line.replace(/^details:\s*/i, "").trim();
+      }
+    }
+
+    if (offer.title) {
+      offers.push(offer);
+    }
+  }
+
+  return offers;
+}
+
+function renderOngoingOffersContent(text: string, onBack: () => void) {
+  const offers = parseOngoingOffersContent(text);
+
+  if (!offers.length) {
+    return renderMessageContent(text);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-3">
+        {offers.map((offer, index) => (
+          <div
+            key={`${offer.title}-${index}`}
+            className="overflow-hidden rounded-xl border border-[#D7E5EC] bg-white text-[#123047] shadow-sm"
+          >
+            {offer.image ? (
+              <div className="w-full bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={offer.image}
+                  alt={offer.title}
+                  className="block h-auto w-full"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
+            <div className="space-y-1.5 px-3 py-3">
+              <div className="flex min-w-0 items-start gap-2">
+                <span className="mt-1 shrink-0 text-sm font-bold leading-none text-[#E31B4F]">
+                  ‹
+                </span>
+                <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#123047] [overflow-wrap:anywhere]">
+                  {formatMessage(offer.title)}
+                </p>
+                <span className="mt-1 shrink-0 text-sm font-bold leading-none text-[#E31B4F]">
+                  ›
+                </span>
+              </div>
+              {offer.description ? (
+                <p className="line-clamp-2 text-xs leading-5 text-gray-500">
+                  {formatMessage(offer.description)}
+                </p>
+              ) : null}
+            </div>
+            <div className="divide-y divide-gray-100 border-t border-gray-100">
+              <a
+                href={offer.details || "https://www.ebl.com.bd/whats-new"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-[#005B96] transition hover:bg-[#FFF8D8]"
+              >
+                <span>Offer Details</span>
+                <ExternalLinkIcon className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onBack}
+        className="w-full rounded-xl border border-[#005B96]/20 bg-white px-3 py-2.5 text-sm font-semibold text-[#005B96] shadow-sm transition hover:border-[#FFC629]/80 hover:bg-[#FFF8D8]"
+      >
+        Back
+      </button>
+    </div>
+  );
+}
+
+function renderOngoingOffersCarouselContent(
+  text: string,
+  activeIndex: number,
+  onPrevious: (totalOffers: number) => void,
+  onNext: (totalOffers: number) => void,
+  onSelect: (offerIndex: number) => void,
+  onBack: () => void,
+) {
+  const offers = parseOngoingOffersContent(text);
+
+  if (!offers.length) {
+    return renderOngoingOffersContent(text, onBack);
+  }
+
+  const offerIndex = Math.min(Math.max(activeIndex, 0), offers.length - 1);
+  const offer = offers[offerIndex];
+  const hasMultipleOffers = offers.length > 1;
+
+  const arrowButtonClass =
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#005B96]/15 bg-[#F7FBFD] text-base font-bold text-[#005B96]/75 shadow-sm transition hover:border-[#FFC629] hover:bg-[#FFF4C2] hover:text-[#005B96] focus:outline-none focus:ring-2 focus:ring-[#FFC629]/45 disabled:cursor-not-allowed disabled:opacity-30";
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-hidden rounded-xl border border-[#D7E5EC] bg-white text-[#123047] shadow-sm">
+        <div className="bg-white">
+          {offer.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={offer.image}
+              alt={offer.title}
+              className="block h-auto w-full"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-32 items-center justify-center bg-[#F6FAFC] px-10 text-center text-xs font-semibold text-[#005B96]">
+              {formatMessage(offer.title)}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1.5 px-3 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {hasMultipleOffers ? (
+              <button
+                type="button"
+                onClick={() => onPrevious(offers.length)}
+                className={arrowButtonClass}
+                aria-label="Previous offer"
+                title="Previous offer"
+              >
+                {"<"}
+              </button>
+            ) : null}
+            <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#123047] [overflow-wrap:anywhere]">
+              {formatMessage(offer.title)}
+            </p>
+            {hasMultipleOffers ? (
+              <button
+                type="button"
+                onClick={() => onNext(offers.length)}
+                className={arrowButtonClass}
+                aria-label="Next offer"
+                title="Next offer"
+              >
+                {">"}
+              </button>
+            ) : null}
+          </div>
+          {offer.description ? (
+            <p className="line-clamp-2 text-xs leading-5 text-gray-500">
+              {formatMessage(offer.description)}
+            </p>
+          ) : null}
+          {hasMultipleOffers ? (
+            <p className="text-center text-[11px] font-semibold text-gray-400">
+              {offerIndex + 1} of {offers.length}
+            </p>
+          ) : null}
+        </div>
+        <div className="divide-y divide-gray-100 border-t border-gray-100">
+          <a
+            href={offer.details || "https://www.ebl.com.bd/whats-new"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-[#005B96] transition hover:bg-[#FFF8D8]"
+          >
+            <span>Offer Details</span>
+            <ExternalLinkIcon className="h-3.5 w-3.5" />
+          </a>
+        </div>
+      </div>
+      {hasMultipleOffers ? (
+        <div className="flex justify-center gap-1.5">
+          {offers.map((offerItem, index) => (
+            <button
+              key={`${offerItem.title}-dot-${index}`}
+              type="button"
+              onClick={() => onSelect(index)}
+              className={`h-1.5 rounded-full transition ${
+                index === offerIndex
+                  ? "w-5 bg-[#FFC629]"
+                  : "w-1.5 bg-white/60 hover:bg-white"
+              }`}
+              aria-label={`Show offer ${index + 1}`}
+              title={`Show offer ${index + 1}`}
+            />
+          ))}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={onBack}
+        className="w-full rounded-xl border border-[#005B96]/20 bg-white px-3 py-2.5 text-sm font-semibold text-[#005B96] shadow-sm transition hover:border-[#FFC629]/80 hover:bg-[#FFF8D8]"
+      >
+        Back
+      </button>
     </div>
   );
 }
@@ -1488,6 +1764,22 @@ function isSupportQuickAction(action: string) {
   );
 }
 
+function isCampaignOptionText(text: string, actions?: string[]) {
+  return (
+    text.toLowerCase().includes("which campaign would you like to view") &&
+    hasAnyAction(actions, ["Ongoing Offer", "Ongoing Offers"])
+  );
+}
+
+function isCampaignQuickAction(action: string) {
+  return [
+    "on going offer",
+    "on going offers",
+    "ongoing offer",
+    "ongoing offers",
+  ].includes(normalizeQuickAction(action));
+}
+
 function isScopedOptionMenuMessage(message: Message | null) {
   if (!message || message.role !== "bot" || !message.quickActions?.length) {
     return false;
@@ -1501,13 +1793,15 @@ function isScopedOptionMenuMessage(message: Message | null) {
     hasMenuSource(message, LOAN_MENU_SOURCES) ||
     hasMenuSource(message, BRANCH_LOCATOR_MENU_SOURCES) ||
     hasMenuSource(message, SUPPORT_MENU_SOURCES) ||
+    hasMenuSource(message, CAMPAIGN_MENU_SOURCES) ||
     isScheduleChargeOptionText(message.text, message.quickActions) ||
     isInterestRateOptionText(message.text, message.quickActions) ||
     isCardInformationOptionText(message.text, message.quickActions) ||
     isAccountOptionText(message.text, message.quickActions) ||
     isLoanOptionText(message.text, message.quickActions) ||
     isBranchLocatorOptionText(message.text, message.quickActions) ||
-    isSupportOptionText(message.text, message.quickActions)
+    isSupportOptionText(message.text, message.quickActions) ||
+    isCampaignOptionText(message.text, message.quickActions)
   );
 }
 
@@ -1530,6 +1824,9 @@ export default function Chatbot() {
   const [isLiveChatAgentTyping, setIsLiveChatAgentTyping] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [offerCarouselIndexes, setOfferCarouselIndexes] = useState<
+    Record<string, number>
+  >({});
 
   const messageListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -2506,7 +2803,7 @@ export default function Chatbot() {
   const renderQuickActionButton = (action: string) => {
     const isMainAction = isMainMenuQuickAction(action);
     const isDistrictAction = isDistrictQuickAction(action);
-    const isWideMainAction = isMainAction && action === SUPPORT_ACTION;
+    const isWideMainAction = false;
 
     return (
       <button
@@ -2554,10 +2851,11 @@ export default function Chatbot() {
   const renderServiceActionList = (
     actions: string[],
     showScopedBack = false,
+    heading = "Select Services",
   ) => (
     <div className="animate-ebl-service-in mt-2 w-full max-w-[92%] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600">
-        <span>Select Services</span>
+        <span>{heading}</span>
         {showScopedBack ? (
           <button
             type="button"
@@ -2575,7 +2873,9 @@ export default function Chatbot() {
         {actions.map((action) => {
           const isLocationAction = isLocationQuickAction(action);
           const isSupportAction = isSupportQuickAction(action);
-          const hasLeadingIcon = isLocationAction || isSupportAction;
+          const isCampaignAction = isCampaignQuickAction(action);
+          const hasLeadingIcon =
+            isLocationAction || isSupportAction || isCampaignAction;
 
           return (
             <button
@@ -2852,6 +3152,33 @@ export default function Chatbot() {
         )}
       </div>
     );
+  };
+
+  const setOfferCarouselIndex = (carouselKey: string, offerIndex: number) => {
+    setOfferCarouselIndexes((currentIndexes) => ({
+      ...currentIndexes,
+      [carouselKey]: offerIndex,
+    }));
+  };
+
+  const moveOfferCarousel = (
+    carouselKey: string,
+    totalOffers: number,
+    direction: -1 | 1,
+  ) => {
+    if (totalOffers <= 0) {
+      return;
+    }
+
+    setOfferCarouselIndexes((currentIndexes) => {
+      const currentIndex = currentIndexes[carouselKey] ?? 0;
+      const nextIndex = (currentIndex + direction + totalOffers) % totalOffers;
+
+      return {
+        ...currentIndexes,
+        [carouselKey]: nextIndex,
+      };
+    });
   };
 
   const renderTypingIndicator = () => (
@@ -3138,12 +3465,21 @@ export default function Chatbot() {
                     const isComplaintCellMessage =
                       message.role === "bot" &&
                       message.source === "complaint-cell-agent";
+                    const isOngoingOffersMessage =
+                      message.role === "bot" &&
+                      ONGOING_OFFERS_MESSAGE_SOURCES.has(message.source ?? "");
                     const isHumanSupportBotMessage =
                       isHumanSupportMessage(message);
                     const isHumanSupportEndedBotMessage =
                       isHumanSupportEndedMessage(message);
                     const isMenuOnlyMessage =
                       message.role === "bot" && message.menuOnly;
+                    const offerCarouselKey = isOngoingOffersMessage
+                      ? `offer-${message.chatId ?? index}`
+                      : "";
+                    const activeOfferIndex = offerCarouselKey
+                      ? offerCarouselIndexes[offerCarouselKey] ?? 0
+                      : 0;
 
                     return (
                       <div
@@ -3159,7 +3495,9 @@ export default function Chatbot() {
                         {!isMenuOnlyMessage ? (
                           <div
                             className={`${
-                              isCorporateTableMessage || isComplaintCellMessage
+                              isCorporateTableMessage ||
+                              isComplaintCellMessage ||
+                              isOngoingOffersMessage
                                 ? "max-w-full rounded-xl px-2.5 py-2.5"
                                 : "max-w-[88%] rounded-2xl px-4 py-3"
                             } min-w-0 break-words text-sm leading-6 shadow-sm [overflow-wrap:anywhere] ${
@@ -3174,7 +3512,30 @@ export default function Chatbot() {
                           >
                             {isComplaintCellMessage
                               ? renderComplaintCellContent(message.text)
-                              : renderMessageContent(message.text)}
+                              : isOngoingOffersMessage
+                                ? renderOngoingOffersCarouselContent(
+                                    message.text,
+                                    activeOfferIndex,
+                                    (totalOffers) =>
+                                      moveOfferCarousel(
+                                        offerCarouselKey,
+                                        totalOffers,
+                                        -1,
+                                      ),
+                                    (totalOffers) =>
+                                      moveOfferCarousel(
+                                        offerCarouselKey,
+                                        totalOffers,
+                                        1,
+                                      ),
+                                    (offerIndex) =>
+                                      setOfferCarouselIndex(
+                                        offerCarouselKey,
+                                        offerIndex,
+                                      ),
+                                    handleShowMainMenu,
+                                  )
+                                : renderMessageContent(message.text)}
                           </div>
                         ) : null}
                         {renderHumanSupportDetailsForm(message, index)}
@@ -3186,6 +3547,9 @@ export default function Chatbot() {
                             renderServiceActionList(
                               message.quickActions ?? [],
                               isScopedOptionMenuMessage(message),
+                              message.source === "campaign-router"
+                                ? "Select Campaigns"
+                                : "Select Services",
                             )
                           ) : (
                             <div

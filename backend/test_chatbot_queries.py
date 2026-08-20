@@ -48,8 +48,21 @@ TEST_CASES = [
             "Loan Information",
             "Schedule of Charges",
             "Interest Rate",
+            "Ongoing Offer",
         ],
         quick_actions_not_contain=["Suggest Account", "Suggest Loan"],
+    ),
+    QueryCase(
+        name="Ongoing offer main button returns campaign cards",
+        messages=["Ongoing Offer"],
+        sources={"ongoing-offers-agent"},
+        must_contain=["EBL Ongoing Offers", "Offer:", "Details:"],
+    ),
+    QueryCase(
+        name="Ongoing offers returns campaign cards",
+        messages=["Ongoing Offers"],
+        sources={"ongoing-offers-agent"},
+        must_contain=["EBL Ongoing Offers", "Offer:", "Details:"],
     ),
     QueryCase(
         name="Identity question is answered",

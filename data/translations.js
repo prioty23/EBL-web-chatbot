@@ -172,7 +172,7 @@ export const translations = {
       responseTime: "We typically reply in a few seconds.",
       welcome: "Hello! I'm Eastern Bank PLC AI Assistant. How can I help you today?",
       reply: "This chatbot is under construction for now.",
-      quickActions: ["Open an Account", "Loan Information", "Card Information", "Schedule of Charges", "Interest Rate", "Locate Us", "Support"],
+      quickActions: ["Open an Account", "Loan Information", "Card Information", "Ongoing Offer", "Schedule of Charges", "Interest Rate", "Support", "Locate Us"],
       placeholder: "Type your message...",
       send: "Send",
       open: "Open Eastern Bank PLC AI Assistant",

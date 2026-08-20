@@ -33,6 +33,7 @@ from complaint_cell_scraper import (
     build_complaint_cell_form_reply,
     build_complaint_cell_enquiry_reply,
 )
+from ongoing_offers_scraper import build_ongoing_offers_reply
 
 from safety import contains_sensitive_data, get_safety_response
 
@@ -295,10 +296,15 @@ MAIN_QUICK_ACTIONS = [
     "Open an Account",
     "Loan Information",
     "Card Information",
+    "Ongoing Offer",
     "Schedule of Charges",
     "Interest Rate",
-    "Locate Us",
     "Support",
+    "Locate Us",
+]
+CAMPAIGN_MENU_REPLY = "Which campaign would you like to view?"
+CAMPAIGN_QUICK_ACTIONS = [
+    "Ongoing Offer",
 ]
 SUPPORT_MENU_REPLY = "Which support service do you need?"
 SUPPORT_QUICK_ACTIONS = [
@@ -2985,6 +2991,9 @@ def assistant_prompt_domain(reply):
     if reply == SUPPORT_MENU_REPLY:
         return "support"
 
+    if reply == CAMPAIGN_MENU_REPLY:
+        return "campaign"
+
     if is_branch_area_prompt(reply):
         return "branch_locator"
 
@@ -3041,6 +3050,9 @@ BRANCH_BACK_DOMAINS = {
 SUPPORT_BACK_DOMAINS = {
     "support",
 }
+CAMPAIGN_BACK_DOMAINS = {
+    "campaign",
+}
 SCOPED_BACK_DOMAINS = (
     SCHEDULE_BACK_DOMAINS
     | INTEREST_BACK_DOMAINS
@@ -3049,6 +3061,7 @@ SCOPED_BACK_DOMAINS = (
     | LOAN_BACK_DOMAINS
     | BRANCH_BACK_DOMAINS
     | SUPPORT_BACK_DOMAINS
+    | CAMPAIGN_BACK_DOMAINS
 )
 
 
@@ -3074,6 +3087,9 @@ def scoped_back_family(domain):
     if domain in SUPPORT_BACK_DOMAINS:
         return "support"
 
+    if domain in CAMPAIGN_BACK_DOMAINS:
+        return "campaign"
+
     return ""
 
 
@@ -3094,6 +3110,7 @@ def source_for_prompt_domain(domain):
         "branch_district": "branch-locator-agent",
         "branch_locator": "branch-locator-agent",
         "support": "support-router",
+        "campaign": "campaign-router",
     }.get(domain, "greeting-handler")
 
 
@@ -3146,7 +3163,7 @@ def record_scoped_navigation_prompt(session_id, reply, source, quick_actions):
     if domain not in SCOPED_BACK_DOMAINS:
         return
 
-    if domain in {"schedule_charges", "interest_rate", "branch_district", "support"}:
+    if domain in {"schedule_charges", "interest_rate", "branch_district", "support", "campaign"}:
         base_state = stack[0] if stack and stack[0]["domain"] == "main_menu" else main_menu_navigation_state()
         SCOPED_NAVIGATION_STACKS[session_id] = [base_state, state]
         return
@@ -4295,6 +4312,35 @@ def build_top_level_menu_response(message):
         return {
             "reply": SUPPORT_MENU_REPLY,
             "source": "support-router",
+            "status": "answered",
+        }
+
+    if normalized_message in {
+        "offer",
+        "offers",
+        "campaign",
+        "campaigns",
+        "whats new",
+        "what's new",
+        "whats-new",
+    }:
+        return {
+            "reply": build_ongoing_offers_reply(),
+            "source": "ongoing-offers-agent",
+            "status": "answered",
+        }
+
+    if normalized_message in {
+        "on going offer",
+        "on going offers",
+        "ongoing offer",
+        "ongoing offers",
+        "current offers",
+        "latest offers",
+    }:
+        return {
+            "reply": build_ongoing_offers_reply(),
+            "source": "ongoing-offers-agent",
             "status": "answered",
         }
 
@@ -7339,6 +7385,9 @@ def build_quick_actions(reply, source):
 
     if reply == SUPPORT_MENU_REPLY:
         return SUPPORT_QUICK_ACTIONS
+
+    if reply == CAMPAIGN_MENU_REPLY:
+        return CAMPAIGN_QUICK_ACTIONS
 
     if reply == SCHEDULE_CHARGES_MENU_REPLY:
         return SCHEDULE_CHARGE_QUICK_ACTIONS
