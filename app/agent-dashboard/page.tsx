@@ -47,6 +47,10 @@ type AgentResponse = {
   agent: AgentProfile;
 };
 
+type AgentListResponse = {
+  agents: AgentProfile[];
+};
+
 type MessagesResponse = {
   session: LiveChatSession;
   messages: LiveChatMessage[];
@@ -58,6 +62,8 @@ type AgentProfile = {
   email: string;
   is_active: boolean;
   is_available: boolean;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type IconProps = {
@@ -333,17 +339,35 @@ function CustomerDetailsSummary({ session }: { session: LiveChatSession | null }
 
 function ChatHistoryPanel({
   sessions,
+  agents,
   isOpen,
   selectedSessionId,
+  nameSearch,
+  dateFilter,
+  agentFilter,
   onToggle,
+  onNameSearchChange,
+  onDateFilterChange,
+  onAgentFilterChange,
+  onClearFilters,
   onSelectSession,
 }: {
   sessions: LiveChatSession[];
+  agents: AgentProfile[];
   isOpen: boolean;
   selectedSessionId: string;
+  nameSearch: string;
+  dateFilter: string;
+  agentFilter: string;
   onToggle: () => void;
+  onNameSearchChange: (value: string) => void;
+  onDateFilterChange: (value: string) => void;
+  onAgentFilterChange: (value: string) => void;
+  onClearFilters: () => void;
   onSelectSession: (session: LiveChatSession) => void;
 }) {
+  const hasFilters = Boolean(nameSearch.trim() || dateFilter || agentFilter);
+
   return (
     <section className="agent-dashboard-card overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm">
       <div className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
@@ -368,10 +392,62 @@ function ChatHistoryPanel({
       </div>
 
       {isOpen ? (
-        <div className="max-h-56 overflow-y-auto border-t border-[#E5EFEC] p-2">
+        <div className="border-t border-[#E5EFEC]">
+          <div className="space-y-3 bg-[#F8FBFA] px-3 py-3">
+            <label className="block text-xs font-semibold uppercase tracking-[0.06em] text-[#667570]">
+              Search by customer name
+              <input
+                type="search"
+                value={nameSearch}
+                onChange={(event) => onNameSearchChange(event.target.value)}
+                placeholder="Example: Rahim"
+                className="mt-1.5 min-h-10 w-full rounded-[8px] border border-[#C9D7D3] bg-white px-3 text-sm font-medium text-[#20332D] outline-none transition duration-200 placeholder:text-[#9AA8A4] focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10"
+              />
+            </label>
+
+            <label className="block text-xs font-semibold uppercase tracking-[0.06em] text-[#667570]">
+              Filter by date
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(event) => onDateFilterChange(event.target.value)}
+                className="mt-1.5 min-h-10 w-full rounded-[8px] border border-[#C9D7D3] bg-white px-3 text-sm font-medium text-[#20332D] outline-none transition duration-200 focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10"
+              />
+            </label>
+
+            <label className="block text-xs font-semibold uppercase tracking-[0.06em] text-[#667570]">
+              Filter by agent
+              <select
+                value={agentFilter}
+                onChange={(event) => onAgentFilterChange(event.target.value)}
+                className="mt-1.5 min-h-10 w-full rounded-[8px] border border-[#C9D7D3] bg-white px-3 text-sm font-medium text-[#20332D] outline-none transition duration-200 focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10"
+              >
+                <option value="">All support agents</option>
+                {agents.map((agent) => (
+                  <option key={agent.agent_id} value={agent.agent_id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {hasFilters ? (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="inline-flex min-h-9 items-center justify-center rounded-full border border-[#CFE2EC] bg-white px-4 text-xs font-bold text-[#005B96] transition duration-200 hover:border-[#005B96]/45 hover:bg-[#EAF4FB] active:scale-[0.98]"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+
+          <div className="max-h-64 overflow-y-auto p-2">
           {sessions.length === 0 ? (
             <p className="rounded-[8px] border border-dashed border-[#D1DFDB] bg-[#F8FBFA] px-3 py-4 text-center text-xs leading-5 text-[#667570]">
-              Previous chats will appear here after sessions end.
+              {hasFilters
+                ? "No previous chat matches this search."
+                : "Previous chats will appear here after sessions end."}
             </p>
           ) : (
             <div className="space-y-2">
@@ -402,6 +478,7 @@ function ChatHistoryPanel({
               })}
             </div>
           )}
+          </div>
         </div>
       ) : null}
     </section>
@@ -514,11 +591,15 @@ function AgentWorkBar({
 export default function AgentDashboardPage() {
   const router = useRouter();
   const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
+  const [agents, setAgents] = useState<AgentProfile[]>([]);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [waitingSessions, setWaitingSessions] = useState<LiveChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<LiveChatSession | null>(null);
   const [historySessions, setHistorySessions] = useState<LiveChatSession[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyNameSearch, setHistoryNameSearch] = useState("");
+  const [historyDateFilter, setHistoryDateFilter] = useState("");
+  const [historyAgentFilter, setHistoryAgentFilter] = useState("");
   const [selectedSession, setSelectedSession] = useState<LiveChatSession | null>(null);
   const [messages, setMessages] = useState<LiveChatMessage[]>([]);
   const [draftMessage, setDraftMessage] = useState("");
@@ -691,11 +772,28 @@ export default function AgentDashboardPage() {
       const agentProfileRequest = currentAgentId
         ? readApi<AgentResponse>(`/agent/${encodeURIComponent(currentAgentId)}`).catch(() => null)
         : Promise.resolve(null);
-      const [waitingData, activeData, historyData, agentData] = await Promise.all([
+      const historyParams = new URLSearchParams({
+        limit: "50",
+      });
+
+      if (historyNameSearch.trim()) {
+        historyParams.set("name", historyNameSearch.trim());
+      }
+
+      if (historyDateFilter) {
+        historyParams.set("date", historyDateFilter);
+      }
+
+      if (historyAgentFilter) {
+        historyParams.set("agent_id", historyAgentFilter);
+      }
+
+      const [waitingData, activeData, historyData, agentData, agentListData] = await Promise.all([
         readApi<SessionListResponse>("/live-chat/sessions/waiting?limit=50"),
         readApi<SessionResponse>("/live-chat/sessions/active"),
-        readApi<SessionListResponse>("/live-chat/sessions/history?limit=20"),
+        readApi<SessionListResponse>(`/live-chat/sessions/history?${historyParams.toString()}`),
         agentProfileRequest,
+        readApi<AgentListResponse>("/agents"),
       ]);
 
       if (agentData?.agent) {
@@ -707,6 +805,7 @@ export default function AgentDashboardPage() {
       setWaitingSessions(waitingData.sessions);
       setActiveSession(activeData.session);
       setHistorySessions(historyData.sessions);
+      setAgents(agentListData.agents);
 
       if (activeData.session) {
         setSelectedSession((currentSession) => currentSession || activeData.session);
@@ -718,7 +817,7 @@ export default function AgentDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentAgentId]);
+  }, [currentAgentId, historyAgentFilter, historyDateFilter, historyNameSearch]);
 
   useEffect(() => {
     if (isCheckingAuth || !agentProfile) {
@@ -1060,9 +1159,21 @@ export default function AgentDashboardPage() {
                 <div className="flex min-w-0 flex-col gap-5 lg:min-h-0 lg:order-2 lg:overflow-hidden">
                   <ChatHistoryPanel
                     sessions={historySessions}
+                    agents={agents}
                     isOpen={isHistoryOpen}
                     selectedSessionId={selectedSessionId}
+                    nameSearch={historyNameSearch}
+                    dateFilter={historyDateFilter}
+                    agentFilter={historyAgentFilter}
                     onToggle={() => setIsHistoryOpen((currentState) => !currentState)}
+                    onNameSearchChange={setHistoryNameSearch}
+                    onDateFilterChange={setHistoryDateFilter}
+                    onAgentFilterChange={setHistoryAgentFilter}
+                    onClearFilters={() => {
+                      setHistoryNameSearch("");
+                      setHistoryDateFilter("");
+                      setHistoryAgentFilter("");
+                    }}
                     onSelectSession={selectHistorySession}
                   />
                   <aside className="agent-dashboard-card flex min-h-[260px] max-h-[420px] flex-col overflow-hidden rounded-[8px] border border-[#DCE8E4] bg-white shadow-sm lg:min-h-0 lg:max-h-none lg:flex-1">
@@ -1298,7 +1409,7 @@ export default function AgentDashboardPage() {
               </section>
             </div>
 
-            <aside className="order-1 flex min-w-0 flex-col xl:min-h-0 xl:overflow-hidden">
+            <aside className="order-1 flex min-w-0 flex-col gap-5 xl:min-h-0 xl:overflow-y-auto">
               <AgentWorkBar
                 agentName={currentAgentName}
                 agentEmail={currentAgentEmail}

@@ -368,22 +368,47 @@ def get_active_live_chat_session():
     return session
 
 
-def get_live_chat_history_sessions(limit=20):
+def get_live_chat_history_sessions(limit=20, name="", date="", agent_id=""):
     create_live_chat_database()
+
+    normalized_name = (name or "").strip()
+    normalized_date = (date or "").strip()
+    normalized_agent_id = (agent_id or "").strip()
+    filters = [ENDED_STATUS]
+    where_clauses = ["status = ?"]
+
+    if normalized_name:
+        name_like = f"%{normalized_name}%"
+        where_clauses.append("customer_name LIKE ?")
+        filters.append(name_like)
+
+    if normalized_date:
+        date_like = f"{normalized_date}%"
+        where_clauses.append("""
+            (
+                ended_at LIKE ?
+                OR created_at LIKE ?
+                OR updated_at LIKE ?
+            )
+        """)
+        filters.extend([date_like, date_like, date_like])
+
+    if normalized_agent_id:
+        where_clauses.append("agent_id = ?")
+        filters.append(normalized_agent_id)
+
+    filters.append(limit)
 
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT *
         FROM live_chat_sessions
-        WHERE status = ?
+        WHERE {' AND '.join(where_clauses)}
         ORDER BY ended_at DESC, updated_at DESC, id DESC
         LIMIT ?
-    """, (
-        ENDED_STATUS,
-        limit,
-    ))
+    """, tuple(filters))
 
     sessions = [row_to_dict(row) for row in cursor.fetchall()]
     connection.close()

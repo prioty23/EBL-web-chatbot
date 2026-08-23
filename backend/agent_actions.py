@@ -52,7 +52,7 @@ def get_urgent_card_reply():
         "- From overseas: +8809677716230\n"
         "- General contact number: +8809666777325\n"
         "- Email: info@ebl-bd.com\n\n"
-        "For your safety, do not share OTP, PIN, password, CVV, or full card number. "
+        "For your safety, do not share OTP, PIN, password, CVV or full card number. "
         "If needed, I can also help you create a complaint record for this issue."
     )
 
@@ -66,5 +66,5 @@ def get_complaint_start_reply():
         "- Approximate amount, if applicable\n"
         "- Short description of the issue\n"
         "- Last 4 digits only, if card-related\n\n"
-        "Do not share OTP, PIN, password, CVV, or full card number."
+        "Do not share OTP, PIN, password, CVV or full card number."
     )

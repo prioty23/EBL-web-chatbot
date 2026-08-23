@@ -1,5 +1,6 @@
 """Backend entrypoint."""
 
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -9,8 +10,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import (
+    AgentActiveStatusRequest,
     AgentAvailabilityRequest,
+    AgentCreateRequest,
     AgentLoginRequest,
+    AgentPasswordUpdateRequest,
     ChatRequest,
     ChatFeedbackRequest,
     ChatResponse,
@@ -86,12 +90,16 @@ from live_chat_database import (
 )
 
 from agent_database import (
+    add_support_agent,
     create_agent_database,
     get_agent_by_id,
+    get_support_agents,
     get_available_agent_count,
     has_available_agent,
     seed_default_agent,
+    update_agent_active_status,
     update_agent_availability,
+    update_agent_password,
     verify_agent_login,
 )
 
@@ -7810,6 +7818,7 @@ app = FastAPI(
     description="FastAPI backend for Eastern Bank AI chatbot",
     version="1.0.0",
 )
+AGENT_ADMIN_CODE = os.getenv("EBL_AGENT_ADMIN_CODE", "EBLAdmin@2026")
 
 @app.on_event("startup")
 def startup_event():
@@ -7896,6 +7905,106 @@ def get_support_agent_profile(agent_id: str):
         )
 
     return {
+        "agent": agent,
+    }
+
+
+@app.get("/agents")
+def list_support_agents():
+    seed_default_agent()
+
+    return {
+        "agents": get_support_agents(),
+    }
+
+
+def validate_agent_admin_code(admin_code):
+    if not admin_code or admin_code.strip() != AGENT_ADMIN_CODE:
+        raise HTTPException(
+            status_code=403,
+            detail="Valid admin code is required for agent management.",
+        )
+
+
+@app.post("/agents")
+def create_support_agent_profile(request: AgentCreateRequest):
+    validate_agent_admin_code(request.admin_code)
+
+    result = add_support_agent(
+        agent_id=request.agent_id,
+        name=request.name,
+        email=request.email,
+        password=request.password,
+    )
+
+    if result["reason"] == "missing_fields":
+        raise HTTPException(
+            status_code=400,
+            detail="Agent ID, name, email and password are required.",
+        )
+
+    if result["reason"] == "duplicate":
+        raise HTTPException(
+            status_code=409,
+            detail="An agent with this ID or email already exists.",
+        )
+
+    return {
+        "message": "Support agent created.",
+        "agent": result["agent"],
+    }
+
+
+@app.patch("/agents/{agent_id}/active")
+def update_support_agent_active_status(
+    agent_id: str,
+    request: AgentActiveStatusRequest,
+):
+    validate_agent_admin_code(request.admin_code)
+
+    agent = update_agent_active_status(
+        agent_id=agent_id,
+        is_active=request.is_active,
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Support agent not found.",
+        )
+
+    return {
+        "message": "Agent status updated.",
+        "agent": agent,
+    }
+
+
+@app.patch("/agents/{agent_id}/password")
+def update_support_agent_password(
+    agent_id: str,
+    request: AgentPasswordUpdateRequest,
+):
+    validate_agent_admin_code(request.admin_code)
+
+    if not request.password or len(request.password.strip()) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 6 characters.",
+        )
+
+    agent = update_agent_password(
+        agent_id=agent_id,
+        password=request.password,
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Support agent not found.",
+        )
+
+    return {
+        "message": "Agent password updated.",
         "agent": agent,
     }
 
@@ -8004,11 +8113,21 @@ def get_active_live_chat_support_session():
 
 
 @app.get("/live-chat/sessions/history")
-def list_live_chat_history_sessions(limit: int = 20):
+def list_live_chat_history_sessions(
+    limit: int = 20,
+    name: str = "",
+    date: str = "",
+    agent_id: str = "",
+):
     refresh_live_chat_timeouts()
 
     return {
-        "sessions": get_live_chat_history_sessions(limit=limit),
+        "sessions": get_live_chat_history_sessions(
+            limit=limit,
+            name=name,
+            date=date,
+            agent_id=agent_id,
+        ),
     }
 
 

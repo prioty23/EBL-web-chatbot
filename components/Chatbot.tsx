@@ -115,7 +115,7 @@ const HUMAN_SUPPORT_TRANSFER_MESSAGE =
 const HUMAN_SUPPORT_WAITING_MESSAGE =
   "An EBL Support Agent will join the chat as soon as possible.";
 const HUMAN_SUPPORT_BUSY_MESSAGE =
-  "Our EBL support agents are currently busy. Please wait a little longer, or try again later if the matter is not urgent.";
+  "Our EBL support agents are currently busy. Please wait a little longer or try again later if the matter is not urgent.";
 const HUMAN_SUPPORT_UNAVAILABLE_MESSAGE =
   "All EBL Support Agents are unavailable at the moment. You can use Complaint Cell for formal complaints or Contact Us for general support.";
 const HUMAN_SUPPORT_SEND_ERROR_MESSAGE =

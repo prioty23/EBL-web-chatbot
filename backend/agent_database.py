@@ -33,6 +33,8 @@ def row_to_safe_agent(row):
         "email": row["email"],
         "is_active": bool(row["is_active"]),
         "is_available": bool(row["is_available"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
     }
 
 
@@ -132,6 +134,79 @@ def create_support_agent(agent_id, name, email, password, is_active=True, is_ava
     connection.close()
 
 
+def add_support_agent(agent_id, name, email, password):
+    create_agent_database()
+
+    normalized_agent_id = (agent_id or "").strip()
+    normalized_name = (name or "").strip()
+    normalized_email = (email or "").lower().strip()
+    normalized_password = password or ""
+
+    if not normalized_agent_id or not normalized_name or not normalized_email or not normalized_password:
+        return {
+            "created": False,
+            "reason": "missing_fields",
+            "agent": None,
+        }
+
+    now = current_time_string()
+    salt, password_hash = hash_password(normalized_password)
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO support_agents (
+                agent_id,
+                name,
+                email,
+                password_salt,
+                password_hash,
+                is_active,
+                is_available,
+                last_seen_at,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            normalized_agent_id,
+            normalized_name,
+            normalized_email,
+            salt,
+            password_hash,
+            1,
+            0,
+            "",
+            now,
+            now,
+        ))
+        connection.commit()
+    except sqlite3.IntegrityError:
+        connection.close()
+        return {
+            "created": False,
+            "reason": "duplicate",
+            "agent": None,
+        }
+
+    cursor.execute("""
+        SELECT *
+        FROM support_agents
+        WHERE agent_id = ?
+    """, (normalized_agent_id,))
+
+    agent = row_to_safe_agent(cursor.fetchone())
+    connection.close()
+
+    return {
+        "created": True,
+        "reason": "created",
+        "agent": agent,
+    }
+
+
 def seed_default_agent():
     create_agent_database()
 
@@ -227,6 +302,108 @@ def get_agent_by_id(agent_id):
 
     connection = get_connection()
     cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM support_agents
+        WHERE agent_id = ?
+    """, (normalized_agent_id,))
+
+    agent = cursor.fetchone()
+    connection.close()
+
+    return row_to_safe_agent(agent)
+
+
+def get_support_agents():
+    create_agent_database()
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM support_agents
+        ORDER BY is_active DESC, name COLLATE NOCASE ASC, id ASC
+    """)
+
+    agents = [row_to_safe_agent(row) for row in cursor.fetchall()]
+    connection.close()
+
+    return agents
+
+
+def update_agent_active_status(agent_id, is_active):
+    create_agent_database()
+
+    normalized_agent_id = (agent_id or "").strip()
+
+    if not normalized_agent_id:
+        return None
+
+    now = current_time_string()
+    next_active = 1 if is_active else 0
+    next_available = 0 if not is_active else 1
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        UPDATE support_agents
+        SET is_active = ?,
+            is_available = ?,
+            updated_at = ?
+        WHERE agent_id = ?
+    """, (
+        next_active,
+        next_available,
+        now,
+        normalized_agent_id,
+    ))
+
+    connection.commit()
+
+    cursor.execute("""
+        SELECT *
+        FROM support_agents
+        WHERE agent_id = ?
+    """, (normalized_agent_id,))
+
+    agent = cursor.fetchone()
+    connection.close()
+
+    return row_to_safe_agent(agent)
+
+
+def update_agent_password(agent_id, password):
+    create_agent_database()
+
+    normalized_agent_id = (agent_id or "").strip()
+    normalized_password = password or ""
+
+    if not normalized_agent_id or not normalized_password:
+        return None
+
+    now = current_time_string()
+    salt, password_hash = hash_password(normalized_password)
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        UPDATE support_agents
+        SET password_salt = ?,
+            password_hash = ?,
+            updated_at = ?
+        WHERE agent_id = ?
+    """, (
+        salt,
+        password_hash,
+        now,
+        normalized_agent_id,
+    ))
+
+    connection.commit()
 
     cursor.execute("""
         SELECT *

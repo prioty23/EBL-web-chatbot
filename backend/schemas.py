@@ -62,3 +62,21 @@ class AgentLoginRequest(BaseModel):
 
 class AgentAvailabilityRequest(BaseModel):
     is_available: bool
+
+
+class AgentCreateRequest(BaseModel):
+    agent_id: str
+    name: str
+    email: str
+    password: str
+    admin_code: str
+
+
+class AgentActiveStatusRequest(BaseModel):
+    is_active: bool
+    admin_code: str
+
+
+class AgentPasswordUpdateRequest(BaseModel):
+    password: str
+    admin_code: str
