@@ -237,6 +237,12 @@ def detect_intent(message):
         "credit card",
         "debit card",
         "prepaid card",
+        "dual currency",
+        "dual currency card",
+        "dollar endorsement",
+        "foreign currency endorsement",
+        "passport endorsement",
+        "endorsement",
         "visa",
         "mastercard",
         "card service"
@@ -246,6 +252,11 @@ def detect_intent(message):
     # Loan information
     if contains_any(message, [
         "loan",
+        "loans",
+        "oan",
+        "oans",
+        "loam",
+        "lone",
         "personal loan",
         "home loan",
         "auto loan",

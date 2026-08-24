@@ -144,6 +144,16 @@ TEST_CASES = [
         ],
     ),
     QueryCase(
+        name="Women account recommendation stays in account context",
+        messages=["which account is best for women?"],
+        sources={"account-router"},
+        must_contain=[
+            "suitable EBL account/deposit option",
+            "EBL Smart Women's Savings Account",
+        ],
+        must_not_contain=["Which account type", "Which loan type"],
+    ),
+    QueryCase(
         name="Loan information asks loan type",
         messages=["Loan Information"],
         sources={"loan-router"},
@@ -205,6 +215,47 @@ TEST_CASES = [
             "Card Information",
             "Schedule of Charges",
         ],
+    ),
+    QueryCase(
+        name="Women loan recommendation stays in loan context",
+        messages=["for women which loan is perfect"],
+        sources={"loan-router"},
+        must_contain=[
+            "suitable EBL loan option",
+            "EBL Women's Loan",
+            "Salaried Women",
+        ],
+        must_not_contain=["Which loan type"],
+    ),
+    QueryCase(
+        name="Short women loans request returns loan recommendation",
+        messages=["women loans"],
+        sources={"loan-router"},
+        must_contain=[
+            "suitable EBL loan option",
+            "EBL Women's Loan",
+        ],
+        must_not_contain=["Which loan type", "not related"],
+    ),
+    QueryCase(
+        name="Typo women oans request returns loan recommendation",
+        messages=["women oans"],
+        sources={"loan-router"},
+        must_contain=[
+            "suitable EBL loan option",
+            "EBL Women's Loan",
+        ],
+        must_not_contain=["Which loan type", "not related"],
+    ),
+    QueryCase(
+        name="Kids loan request returns education loan recommendation",
+        messages=["kids loan"],
+        sources={"loan-router"},
+        must_contain=[
+            "suitable EBL loan option",
+            "EBL Edu Loan",
+        ],
+        must_not_contain=["Which loan type", "not related"],
     ),
     QueryCase(
         name="Schedule of charges asks schedule type",
@@ -321,6 +372,29 @@ TEST_CASES = [
             "Mastercard Concierge Service",
         ],
         must_not_contain=["details:\n\nDetails link"],
+    ),
+    QueryCase(
+        name="Student card recommendation uses student-specific context",
+        messages=["i am a student, which card will be perfect for me?"],
+        sources={"card-router"},
+        must_contain=[
+            "EBL Campus Account",
+            "Dual Currency Debit Card",
+            "First year free",
+            "Any student aged",
+        ],
+        must_not_contain=["Which EBL card type"],
+    ),
+    QueryCase(
+        name="Women card recommendation stays in card context",
+        messages=["which card is suitable for women?"],
+        sources={"card-router"},
+        must_contain=[
+            "suitable EBL card option",
+            "Women's Platinum Debit Card",
+            "Designed especially for women",
+        ],
+        must_not_contain=["Which EBL card type"],
     ),
     QueryCase(
         name="Card information back returns main menu",

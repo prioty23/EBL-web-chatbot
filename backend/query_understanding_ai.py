@@ -67,6 +67,13 @@ language
 
 Language should be a short label such as english, banglish, bangla, broken_english, or unknown.
 The search_query should be clean English terms useful for searching Eastern Bank PLC website content.
+For case-specific questions, the search_query must preserve both:
+- the EBL product/service the customer is asking about
+- the exact information type requested, such as process, required documents, requirements, eligibility, fees, limits, features, application, activation, or recommendation
+Example: "How can I do dollar endorsement?" -> "EBL dollar endorsement process"
+Example: "What documents are required for dollar endorsement?" -> "EBL dollar endorsement required documents"
+Example: "I am a student, which card will be perfect for me?" -> "EBL student card recommendation suitable card"
+Example follow-up after a product was discussed: keep the requested detail words clearly, such as "required documents" or "process".
 
 Intent guidance:
 - Understand Banglish, Bangla-style English, broken English, spelling mistakes, and short customer messages semantically.

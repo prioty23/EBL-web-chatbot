@@ -671,12 +671,573 @@ GENERIC_QUERY_WORDS = [
 ]
 
 
-def build_relevant_website_snippet(page_text, query_words, prefer_documents, max_characters=4000):
+CASE_DETAIL_KEYWORDS = {
+    "process": [
+        "process",
+        "procedure",
+        "step",
+        "steps",
+        "apply",
+        "application",
+        "request",
+        "submit",
+        "visit",
+        "form",
+        "issue",
+        "issuance",
+        "avail",
+    ],
+    "documents": [
+        "document",
+        "documents",
+        "paper",
+        "papers",
+        "required",
+        "requirement",
+        "requirements",
+        "nid",
+        "passport",
+        "photo",
+        "photograph",
+        "tin",
+        "kyc",
+        "form",
+    ],
+    "requirements": [
+        "requirement",
+        "requirements",
+        "required",
+        "must",
+        "minimum",
+        "condition",
+        "conditions",
+        "criteria",
+    ],
+    "eligibility": [
+        "eligibility",
+        "eligible",
+        "age",
+        "minimum",
+        "customer",
+        "resident",
+        "salary",
+        "income",
+    ],
+    "fees": [
+        "fee",
+        "fees",
+        "charge",
+        "charges",
+        "commission",
+        "vat",
+        "cost",
+    ],
+    "limits": [
+        "limit",
+        "limits",
+        "quota",
+        "amount",
+        "maximum",
+        "minimum",
+        "daily",
+        "per day",
+        "transaction",
+        "usd",
+        "bdt",
+    ],
+    "features": [
+        "feature",
+        "features",
+        "benefit",
+        "benefits",
+        "offer",
+        "offers",
+        "facility",
+        "facilities",
+    ],
+    "application": [
+        "apply",
+        "application",
+        "application form",
+        "onlineapply",
+        "quick apply",
+        "web lead",
+        "form",
+    ],
+    "activation": [
+        "activate",
+        "activation",
+        "active",
+        "pin",
+        "ivr",
+        "smart ivr",
+    ],
+    "recommendation": [
+        "recommend",
+        "suggest",
+        "suitable",
+        "best",
+        "perfect",
+        "match",
+        "for me",
+    ],
+}
+
+
+CASE_DETAIL_LABELS = {
+    "process": "process/how-to",
+    "documents": "required documents",
+    "requirements": "requirements",
+    "eligibility": "eligibility",
+    "fees": "fees/charges",
+    "limits": "limits",
+    "features": "features",
+    "application": "application",
+    "activation": "activation",
+    "recommendation": "recommendation/suggestion",
+}
+
+
+CASE_DETAIL_PATTERNS = {
+    "recommendation": [
+        " recommend",
+        " recommendation",
+        " suggest",
+        " suggestion",
+        " suitable",
+        " best for me",
+        " perfect for me",
+        " which card",
+        " which account",
+        " which loan",
+        " card for me",
+        " account for me",
+        " loan for me",
+    ],
+    "fees": [
+        " fee",
+        " fees",
+        " charge",
+        " charges",
+        " commission",
+        " vat",
+        " cost",
+        "koto",
+    ],
+    "limits": [
+        " limit",
+        " limits",
+        " quota",
+        " amount",
+        " maximum",
+        " minimum",
+        " per day",
+        " daily",
+        " transaction limit",
+    ],
+    "documents": [
+        " document",
+        " documents",
+        " paper",
+        " papers",
+        " required document",
+        " document requirement",
+        " what do i need",
+        " what documents",
+        " ki ki document",
+        " ki ki papers",
+        " kagoj",
+        " paper lagbe",
+        " documents lagbe",
+    ],
+    "eligibility": [
+        " eligibility",
+        " eligible",
+        " who can",
+        " age",
+        " salary",
+        " income",
+    ],
+    "requirements": [
+        " requirement",
+        " requirements",
+        " required",
+        " condition",
+        " conditions",
+        " criteria",
+    ],
+    "activation": [
+        " activate",
+        " activation",
+        " pin",
+        " smart ivr",
+    ],
+    "application": [
+        " apply",
+        " application",
+        " application form",
+        " online apply",
+        " apply link",
+        " quick apply",
+    ],
+    "process": [
+        " how can",
+        " how to",
+        " process",
+        " procedure",
+        " step",
+        " steps",
+        " way",
+        " kivabe",
+        " kibhabe",
+        " ki vabe",
+        " do ",
+        " get ",
+        " avail",
+    ],
+    "features": [
+        " feature",
+        " features",
+        " benefit",
+        " benefits",
+        " facility",
+        " facilities",
+        " general information",
+    ],
+}
+
+
+CASE_DETAIL_ANCHORS = {
+    "process": [
+        "how to apply",
+        "can apply through",
+        "clients can apply through",
+        "to apply",
+        "application form",
+        "completed application form",
+        "visit",
+        "submit",
+        "request",
+        "procedure",
+        "process",
+        "activation through",
+    ],
+    "documents": [
+        "required documents for account opening",
+        "documents required",
+        "required documents",
+        "document requirements",
+        "document requirement",
+        "completed application form",
+        "completed ebl prepaid card application form",
+        "valid passport",
+        "valid photocopy of nid",
+        "photocopy of national id",
+        "recent passport size",
+        "kyc form",
+    ],
+    "requirements": [
+        "eligibility & requirements",
+        "eligibility",
+        "requirements",
+        "minimum age",
+        "conditions apply",
+        "required documents",
+    ],
+    "eligibility": [
+        "eligibility",
+        "eligible",
+        "minimum age",
+        "age of client",
+        "age:",
+        "income",
+        "salary",
+    ],
+    "fees": [
+        "fees & charges",
+        "fees and charges",
+        "fee",
+        "charge",
+        "charges",
+        "as per schedule of charge",
+    ],
+    "limits": [
+        "limit",
+        "limits",
+        "quota",
+        "maximum",
+        "minimum",
+        "per day",
+        "transaction",
+        "usd",
+        "bdt",
+    ],
+    "features": [
+        "key features",
+        "features",
+        "special offer",
+        "facility",
+        "facilities",
+    ],
+    "application": [
+        "apply now",
+        "quick apply",
+        "can apply through",
+        "application form",
+        "onlineapply",
+        "web lead portal",
+    ],
+    "activation": [
+        "activation",
+        "activate",
+        "smart ivr",
+        "pin",
+    ],
+    "recommendation": [
+        "best for you",
+        "suitable",
+        "recommended",
+        "recommendation",
+        "special offer",
+        "key features",
+        "features",
+        "eligibility",
+    ],
+}
+
+
+KNOWN_CASE_SERVICE_PHRASES = [
+    "ebl dual currency debit card",
+    "dual currency debit card",
+    "dual currency credit card",
+    "dual currency prepaid card",
+    "dual currency card",
+    "dollar endorsement",
+    "foreign currency endorsement",
+    "office quota endorsement",
+    "passport endorsement",
+    "ebl debit card",
+    "debit card",
+    "credit card",
+    "prepaid card",
+    "skybanking",
+    "student file",
+    "ebl account",
+    "current account",
+    "savings account",
+]
+
+
+GENERIC_CASE_SERVICE_PHRASES = {
+    "ebl debit card",
+    "debit card",
+    "credit card",
+    "prepaid card",
+    "ebl account",
+}
+
+
+CASE_DETAIL_STOP_WORDS = set(GENERIC_QUERY_WORDS + [
+    "can",
+    "could",
+    "give",
+    "know",
+    "need",
+    "please",
+    "process",
+    "procedure",
+    "required",
+    "requirement",
+    "requirements",
+    "document",
+    "documents",
+    "paper",
+    "papers",
+    "fee",
+    "fees",
+    "charge",
+    "charges",
+    "limit",
+    "limits",
+    "how",
+    "do",
+    "best",
+    "perfect",
+    "recommend",
+    "recommendation",
+    "suggest",
+    "suitable",
+    "which",
+    "for",
+    "me",
+])
+
+
+def clean_case_search_text(text, expand=True):
+    text = text or ""
+
+    if expand:
+        text = expand_bangla_banglish_text(text)
+
+    text = text.lower()
+
+    cleaned_text = "".join(
+        character if character.isalnum() else " "
+        for character in text
+    )
+
+    return " ".join(cleaned_text.split())
+
+
+def detect_case_detail_type(text):
+    cleaned_text = f" {clean_case_search_text(text)} "
+
+    for detail_type in [
+        "recommendation",
+        "fees",
+        "limits",
+        "documents",
+        "eligibility",
+        "requirements",
+        "activation",
+        "application",
+        "process",
+        "features",
+    ]:
+        for pattern in CASE_DETAIL_PATTERNS[detail_type]:
+            pattern = f" {clean_case_search_text(pattern, expand=False)} "
+
+            if pattern in cleaned_text:
+                return detail_type
+
+    return "general"
+
+
+def extract_case_service_phrases(cleaned_query):
+    phrases = []
+
+    for phrase in KNOWN_CASE_SERVICE_PHRASES:
+        if phrase in cleaned_query and phrase not in GENERIC_CASE_SERVICE_PHRASES:
+            phrases.append(phrase)
+
+    if "endorsement" in cleaned_query and "endorsement" not in phrases:
+        phrases.append("endorsement")
+
+    if "dollar endorsement" in cleaned_query:
+        for phrase in [
+            "foreign currency endorsement",
+            "endorsement for international transactions",
+        ]:
+            if phrase not in phrases:
+                phrases.append(phrase)
+
+    return phrases
+
+
+def format_case_subject(subject):
+    formatted_subject = subject.title()
+
+    acronym_replacements = {
+        "Ebl": "EBL",
+        "Bdt": "BDT",
+        "Usd": "USD",
+        "Nid": "NID",
+        "Kyc": "KYC",
+        "Fcy": "FCY",
+        "Ib": "IB",
+    }
+
+    for old_value, new_value in acronym_replacements.items():
+        formatted_subject = formatted_subject.replace(old_value, new_value)
+
+    return formatted_subject
+
+
+def infer_case_subject(current_message, conversation_context=""):
+    for text in [current_message, conversation_context]:
+        for line in str(text or "").splitlines():
+            if line.lower().startswith("resolved ebl product/service:"):
+                resolved_subject = line.split(":", 1)[1].strip()
+
+                if resolved_subject:
+                    return resolved_subject
+
+        cleaned_text = clean_case_search_text(text)
+
+        for phrase in KNOWN_CASE_SERVICE_PHRASES:
+            if phrase in cleaned_text:
+                return format_case_subject(phrase)
+
+    cleaned_message = clean_case_search_text(current_message)
+    words = [
+        word
+        for word in normalize_query_words(cleaned_message)
+        if word not in CASE_DETAIL_STOP_WORDS
+    ]
+
+    if words:
+        return format_case_subject(" ".join(words[:6]))
+
+    return ""
+
+
+def build_case_specific_context_note(current_message, search_query="", conversation_context=""):
+    detail_type = detect_case_detail_type(f"{current_message}\n{search_query}")
+
+    if detail_type == "general":
+        return ""
+
+    subject = infer_case_subject(
+        current_message,
+        f"{search_query}\n{conversation_context}",
+    )
+
+    note_lines = [
+        "Case-specific request:",
+    ]
+
+    if subject:
+        note_lines.append(f"- Requested EBL product/service: {subject}")
+
+    note_lines.extend([
+        f"- Requested information type: {CASE_DETAIL_LABELS.get(detail_type, detail_type)}",
+        "- Answer only this requested information type.",
+        "- Do not replace a process, document, limit, fee, eligibility, application, or activation question with general product features.",
+        "- If the exact requested information type is not present in the EBL context, say that this specific information is not available in the current EBL knowledge base and guide the customer to EBL support/contact options.",
+    ])
+
+    return "\n".join(note_lines)
+
+
+def build_relevant_website_snippet(
+    page_text,
+    query_words,
+    prefer_documents,
+    max_characters=4000,
+    detail_type="general",
+    case_phrases=None,
+):
     if not page_text:
         return ""
 
     lower_text = page_text.lower()
     best_position = -1
+    case_phrases = case_phrases or []
+
+    for phrase in case_phrases:
+        position = lower_text.find(phrase)
+
+        if position >= 0:
+            best_position = position
+            break
+
+    if best_position < 0 and detail_type in CASE_DETAIL_ANCHORS:
+        for phrase in CASE_DETAIL_ANCHORS[detail_type]:
+            position = lower_text.find(phrase)
+
+            if position >= 0:
+                best_position = position
+                break
 
     if prefer_documents:
         document_phrases = [
@@ -781,17 +1342,25 @@ def search_website_information(query, limit=5):
         for word in user_query_words
         if word not in GENERIC_QUERY_WORDS
     ]
+    detail_type = detect_case_detail_type(cleaned_query)
+    detail_keywords = CASE_DETAIL_KEYWORDS.get(detail_type, [])
+    case_phrases = extract_case_service_phrases(cleaned_query)
 
     extra_keywords = []
-    prefer_documents = contains_any_query_word(cleaned_query, [
-        "document",
-        "documents",
-        "required",
-        "requirement",
-        "requirements",
-        "need",
-        "needed",
-    ])
+    prefer_documents = detail_type == "documents" or contains_any_query_word(
+        cleaned_query,
+        [
+            "document",
+            "documents",
+            "required",
+            "requirement",
+            "requirements",
+            "need",
+            "needed",
+        ],
+    )
+
+    extra_keywords.extend(detail_keywords)
 
     if "account" in cleaned_query or "open" in cleaned_query:
         extra_keywords.extend([
@@ -894,6 +1463,16 @@ def search_website_information(query, limit=5):
     rows = cursor.fetchall()
     connection.close()
 
+    case_phrase_available = False
+
+    if case_phrases:
+        for row in rows:
+            searchable_text = f"{row[0]} {row[1]} {row[2] or ''}".lower()
+
+            if any(phrase in searchable_text for phrase in case_phrases):
+                case_phrase_available = True
+                break
+
     scored_pages = []
 
     for row in rows:
@@ -907,6 +1486,24 @@ def search_website_information(query, limit=5):
         score = 0
         important_words = user_important_words
         identity_hits = 0
+        detail_hits = 0
+        phrase_hits = 0
+
+        for phrase in case_phrases:
+            if phrase in searchable_text:
+                phrase_hits += 1
+                score += searchable_text.count(phrase) * 140
+
+            if phrase in page_identity:
+                score += 900
+
+        if (
+            detail_type != "general"
+            and case_phrase_available
+            and case_phrases
+            and phrase_hits == 0
+        ):
+            continue
 
         for word in query_words:
             if word in searchable_text:
@@ -922,6 +1519,36 @@ def search_website_information(query, limit=5):
                     score += 25
                 else:
                     score += 250
+
+        if detail_type != "general":
+            for phrase in CASE_DETAIL_ANCHORS.get(detail_type, []):
+                if phrase in searchable_text:
+                    hit_count = searchable_text.count(phrase)
+                    detail_hits += hit_count
+                    score += hit_count * 45
+
+            if "endorsement" in cleaned_query:
+                if (
+                    "valid passport is mandatory for endorsement" in searchable_text
+                    or "valid passport is required for endorsement" in searchable_text
+                    or "required for endorsement to perform international transactions" in searchable_text
+                ):
+                    score += 1800
+
+                if detail_type == "documents" and "foreign currency endorsement in passport allowed" in searchable_text:
+                    score -= 700
+
+            for keyword in detail_keywords:
+                if keyword in searchable_text:
+                    detail_hits += min(searchable_text.count(keyword), 3)
+
+            if detail_hits > 0:
+                score += min(detail_hits, 10) * 35
+            elif important_words:
+                score -= 220
+
+            if phrase_hits == 0 and case_phrases:
+                score -= 1500 if case_phrase_available else 180
 
         for word in important_words:
             if word in page_identity:
@@ -973,9 +1600,9 @@ def search_website_information(query, limit=5):
 
         if "card" in cleaned_query or "cards" in cleaned_query:
             if "card" in page_identity or "eblcard" in page_identity:
-                score += 300
-            elif "loan" in page_identity:
-                score -= 400
+                score += 500
+            elif "digital" in page_identity or "loan" in page_identity or "account" in page_identity:
+                score -= 450
 
             if not important_words and page_name == "EBL Cards Page":
                 score += 800
@@ -999,6 +1626,8 @@ def search_website_information(query, limit=5):
             item["page_text"],
             user_important_words + user_query_words + query_words,
             prefer_documents,
+            detail_type=detail_type,
+            case_phrases=case_phrases,
         )
 
         website_information += f"Page: {item['page_name']}\n"

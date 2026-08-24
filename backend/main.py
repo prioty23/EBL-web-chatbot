@@ -70,6 +70,12 @@ from database import (
     get_pending_complaint,
     delete_pending_complaint,
     mark_final_status_email_sent,
+    build_case_specific_context_note,
+    CASE_DETAIL_LABELS,
+    clean_case_search_text,
+    detect_case_detail_type,
+    extract_case_service_phrases,
+    infer_case_subject,
 )
 
 from live_chat_database import (
@@ -1572,6 +1578,240 @@ def combine_context_sections(*sections):
         section.strip()
         for section in sections
         if section and section.strip()
+    )
+
+
+def is_case_specific_detail_question(message):
+    return detect_case_detail_type(message) != "general"
+
+
+def get_case_detail_type(user_message, search_query=""):
+    return detect_case_detail_type(f"{user_message}\n{search_query}")
+
+
+def should_bypass_generic_product_reply(user_message, search_query=""):
+    return get_case_detail_type(user_message, search_query) not in [
+        "general",
+        "features",
+    ]
+
+
+def detect_case_product_from_text(text):
+    for detector, product_type in [
+        (detect_specific_account_product, "account/deposit"),
+        (detect_specific_loan_product, "loan"),
+        (detect_specific_card_product, "card"),
+    ]:
+        product = detector(text)
+
+        if product:
+            return {
+                "name": product.get("name", ""),
+                "category": product.get("category", ""),
+                "url": product.get("url", ""),
+                "type": product_type,
+            }
+
+    return {}
+
+
+def resolve_case_product_context(user_message, search_query="", history=None, session_summary=""):
+    detail_type = get_case_detail_type(user_message, search_query)
+
+    if detail_type == "general":
+        return {}
+
+    current_text = f"{user_message}\n{search_query}"
+    product_context = detect_case_product_from_text(current_text)
+
+    if product_context:
+        return product_context
+
+    for item in reversed(history or []):
+        content = item.get("content", "")
+
+        if not content:
+            continue
+
+        product_context = detect_case_product_from_text(content)
+
+        if product_context:
+            return product_context
+
+    if session_summary:
+        return detect_case_product_from_text(session_summary)
+
+    return {}
+
+
+def build_resolved_case_product_note(product_context, detail_type):
+    if not product_context or detail_type == "general":
+        return ""
+
+    note_lines = [
+        "Resolved case product/service:",
+        f"- Product/service: {product_context['name']}",
+        f"- Product area: {product_context['type']}",
+    ]
+
+    if product_context.get("category"):
+        note_lines.append(f"- Product category: {product_context['category']}")
+
+    if product_context.get("url"):
+        note_lines.append(f"- Product URL: {product_context['url']}")
+
+    note_lines.extend([
+        "- Use this resolved product/service for follow-up questions.",
+        "- Do not answer using a different EBL product/service unless the customer changes the topic.",
+    ])
+
+    return "\n".join(note_lines)
+
+
+def build_case_specific_retrieval_query(user_message, search_query, history, session_summary):
+    parts = [
+        f"Current customer question: {user_message}",
+        f"Search query: {search_query}",
+    ]
+    detail_type = get_case_detail_type(user_message, search_query)
+    product_context = resolve_case_product_context(
+        user_message,
+        search_query,
+        history,
+        session_summary,
+    )
+
+    if detail_type != "general":
+        parts.append(
+            f"Requested information type: {CASE_DETAIL_LABELS.get(detail_type, detail_type)}"
+        )
+
+    if product_context:
+        parts.extend([
+            f"Resolved EBL product/service: {product_context['name']}",
+            f"Resolved product area: {product_context['type']}",
+        ])
+
+        if product_context.get("category"):
+            parts.append(f"Resolved product category: {product_context['category']}")
+
+        if product_context.get("url"):
+            parts.append(f"Resolved product URL: {product_context['url']}")
+
+    if is_case_specific_detail_question(user_message):
+        recent_context = []
+
+        for item in history[-6:]:
+            role = item.get("role", "")
+            content = item.get("content", "")
+
+            if not content:
+                continue
+
+            recent_context.append(f"{role}: {limit_text(content, 700)}")
+
+        if recent_context:
+            parts.append("Recent conversation context:")
+            parts.extend(recent_context)
+
+        if session_summary:
+            parts.append(f"Session summary: {session_summary}")
+
+    return "\n".join(parts)
+
+
+def is_case_specific_generic_contact_reply(reply):
+    normalized_reply = normalize_literal_menu_text(reply)
+
+    return (
+        "please contact eastern bank plc customer service immediately" in normalized_reply
+        or "please contact ebl support immediately" in normalized_reply
+        or (
+            "contact" in normalized_reply
+            and "immediately" in normalized_reply
+            and (
+                "customer service" in normalized_reply
+                or "support" in normalized_reply
+            )
+        )
+    )
+
+
+def build_case_specific_missing_information_reply(user_message="", retrieval_query=""):
+    subject = infer_case_subject(user_message, retrieval_query)
+    subject_text = f" for {subject}" if subject else ""
+
+    return (
+        f"This specific information{subject_text} is not available in the current EBL knowledge base. "
+        "Please contact EBL support for exact details.\n\n"
+        "Hotline: 16230\n"
+        "From overseas: +8809677716230\n"
+        "Email: info@ebl-bd.com"
+    )
+
+
+def has_nearby_case_phrase(text, phrases, anchors, window=900):
+    for phrase in phrases:
+        start = 0
+
+        while True:
+            position = text.find(phrase, start)
+
+            if position < 0:
+                break
+
+            nearby_text = text[
+                max(0, position - window): position + len(phrase) + window
+            ]
+
+            if any(anchor in nearby_text for anchor in anchors):
+                return True
+
+            start = position + len(phrase)
+
+    return False
+
+
+def has_case_specific_process_evidence(website_info, retrieval_query):
+    cleaned_info = clean_case_search_text(website_info)
+    page_content_start = cleaned_info.find("page ")
+    cleaned_page_info = (
+        cleaned_info[page_content_start:]
+        if page_content_start >= 0
+        else cleaned_info
+    )
+    cleaned_query = clean_case_search_text(retrieval_query)
+    case_phrases = extract_case_service_phrases(cleaned_query)
+
+    if (
+        "dollar endorsement" in cleaned_query
+        and "foreign currency endorsement in passport allowed" in cleaned_page_info
+        and "dollar endorsement" not in cleaned_page_info
+    ):
+        return False
+
+    if not case_phrases:
+        return True
+
+    process_anchors = [
+        "can apply through",
+        "clients can apply through",
+        "to apply visit",
+        "submit it",
+        "submit a",
+        "submitting a",
+        "request form",
+        "procedure for",
+        "process for",
+        "activation through",
+        "collecting the card form",
+    ]
+
+    return has_nearby_case_phrase(
+        cleaned_page_info,
+        case_phrases,
+        process_anchors,
+        window=350,
     )
 
 
@@ -4560,8 +4800,74 @@ def build_required_documents_reply(user_message, website_info, product_name="", 
     return format_document_reply(title, document_lines)
 
 
-def normalize_loan_lookup_text(text):
-    text = expand_bangla_banglish_text(text)
+def extract_endorsement_document_lines(website_info):
+    target_patterns = [
+        "completed ebl prepaid card application form",
+        "recent passport size photograph",
+        "valid photocopy of nid",
+        "valid passport is mandatory for endorsement",
+        "valid passport is required for endorsement",
+        "completed kyc form",
+        "ebl reserves the right to request additional document",
+    ]
+    document_lines = []
+    seen_lines = set()
+
+    for raw_line in website_info.splitlines():
+        line = clean_document_line(raw_line)
+        normalized_line = normalize_loan_lookup_text(line)
+
+        if not line:
+            continue
+
+        if not any(pattern in normalized_line for pattern in target_patterns):
+            continue
+
+        line_key = normalized_line
+
+        if "recent passport size photograph" in normalized_line:
+            line_key = "recent passport size photograph"
+        elif "valid passport" in normalized_line and "endorsement" in normalized_line:
+            line_key = "valid passport endorsement"
+        elif "completed ebl prepaid card application form" in normalized_line:
+            line_key = "completed ebl prepaid card application form"
+        elif "valid photocopy of nid" in normalized_line:
+            line_key = "valid photocopy of nid"
+        elif "completed kyc form" in normalized_line:
+            line_key = "completed kyc form"
+        elif "ebl reserves the right to request additional document" in normalized_line:
+            line_key = "ebl additional documents note"
+
+        if line_key in seen_lines:
+            continue
+
+        seen_lines.add(line_key)
+        document_lines.append(line)
+
+    return document_lines
+
+
+def build_endorsement_document_reply(user_message, website_info):
+    normalized_message = normalize_loan_lookup_text(user_message)
+
+    if "endorsement" not in normalized_message or not has_document_word(user_message):
+        return ""
+
+    document_lines = extract_endorsement_document_lines(website_info)
+
+    if not document_lines:
+        return ""
+
+    return format_document_reply(
+        "For endorsement for international transactions, the EBL context lists:",
+        document_lines,
+    )
+
+
+def normalize_loan_lookup_text(text, expand=True):
+    if expand:
+        text = expand_bangla_banglish_text(text)
+
     text = text.lower()
 
     replacements = {
@@ -4590,8 +4896,13 @@ def normalize_loan_lookup_text(text):
 def contains_loan_lookup_phrase(message, phrase):
     normalized_message = normalize_loan_lookup_text(message)
     normalized_phrase = normalize_loan_lookup_text(phrase)
+    raw_normalized_message = normalize_loan_lookup_text(message, expand=False)
+    raw_normalized_phrase = normalize_loan_lookup_text(phrase, expand=False)
 
-    return f" {normalized_phrase} " in f" {normalized_message} "
+    return (
+        f" {normalized_phrase} " in f" {normalized_message} "
+        or f" {raw_normalized_phrase} " in f" {raw_normalized_message} "
+    )
 
 
 def detect_specific_loan_product(message):
@@ -5037,7 +5348,293 @@ def build_specific_loan_reply(product):
     )
 
 
-def build_loan_router_reply(user_message, intent, history):
+RECOMMENDATION_GENERIC_WORDS = {
+    "a",
+    "about",
+    "account",
+    "accounts",
+    "am",
+    "an",
+    "and",
+    "banking",
+    "best",
+    "card",
+    "cards",
+    "do",
+    "ebl",
+    "for",
+    "i",
+    "is",
+    "know",
+    "loan",
+    "loans",
+    "match",
+    "me",
+    "my",
+    "need",
+    "perfect",
+    "product",
+    "products",
+    "recommend",
+    "recommendation",
+    "service",
+    "services",
+    "should",
+    "suggest",
+    "suitable",
+    "the",
+    "to",
+    "want",
+    "which",
+    "will",
+    "would",
+}
+
+
+RECOMMENDATION_PROFILE_WORDS = {
+    "business",
+    "child",
+    "children",
+    "female",
+    "kid",
+    "kids",
+    "lady",
+    "salary",
+    "salaried",
+    "senior",
+    "student",
+    "startup",
+    "woman",
+    "women",
+    "womens",
+}
+
+
+RECOMMENDATION_PRODUCT_AREA_WORDS = {
+    "account",
+    "accounts",
+    "card",
+    "cards",
+    "credit",
+    "debit",
+    "finance",
+    "financing",
+    "loan",
+    "loam",
+    "loans",
+    "lone",
+    "oan",
+    "oans",
+    "prepaid",
+}
+
+
+RECOMMENDATION_SYNONYMS = {
+    "woman": ["woman", "women", "womens", "female", "lady"],
+    "women": ["woman", "women", "womens", "female", "lady"],
+    "womens": ["woman", "women", "womens", "female", "lady"],
+    "female": ["woman", "women", "womens", "female", "lady"],
+    "lady": ["woman", "women", "womens", "female", "lady"],
+    "student": ["student", "campus", "edu", "education", "junior", "child", "kids"],
+    "education": ["student", "campus", "edu", "education", "child", "kids"],
+    "salary": ["salary", "salaried", "executive", "payroll", "service"],
+    "salaried": ["salary", "salaried", "executive", "payroll", "service"],
+    "business": ["business", "sme", "startup", "current", "cash", "solution"],
+    "startup": ["startup", "business", "sme"],
+    "home": ["home", "mortgage", "housing", "house", "apartment"],
+    "house": ["home", "mortgage", "housing", "house", "apartment"],
+    "apartment": ["home", "mortgage", "housing", "house", "apartment"],
+    "car": ["auto", "car", "vehicle", "motor", "transport"],
+    "vehicle": ["auto", "car", "vehicle", "motor", "transport"],
+    "auto": ["auto", "car", "vehicle", "motor", "transport"],
+    "bike": ["bike", "motorcycle", "two", "wheeler"],
+    "motorcycle": ["bike", "motorcycle", "two", "wheeler"],
+    "islamic": ["islamic", "shariah", "sharia", "mudarabah", "wadiah"],
+    "senior": ["senior", "50"],
+    "child": ["child", "children", "kid", "kids", "junior", "little", "student", "education", "edu"],
+    "children": ["child", "children", "kid", "kids", "junior", "little", "student", "education", "edu"],
+    "kid": ["child", "children", "kid", "kids", "junior", "little", "student", "education", "edu"],
+    "kids": ["child", "children", "kid", "kids", "junior", "little", "student", "education", "edu"],
+}
+
+
+def is_profile_product_recommendation_request(user_message, search_query=""):
+    detail_type = get_case_detail_type(user_message, search_query)
+
+    if detail_type != "general":
+        return False
+
+    normalized_text = normalize_loan_lookup_text(f"{user_message}\n{search_query}")
+    words = set(normalized_text.split())
+
+    return (
+        bool(words & RECOMMENDATION_PROFILE_WORDS)
+        and bool(words & RECOMMENDATION_PRODUCT_AREA_WORDS)
+    )
+
+
+def is_recommendation_question(user_message, search_query=""):
+    return (
+        get_case_detail_type(user_message, search_query) == "recommendation"
+        or is_profile_product_recommendation_request(user_message, search_query)
+    )
+
+
+def get_recommendation_query_terms(user_message, search_query=""):
+    normalized_text = normalize_loan_lookup_text(
+        f"{user_message}\n{search_query}",
+    )
+    terms = []
+
+    for word in normalized_text.split():
+        if word in RECOMMENDATION_GENERIC_WORDS:
+            continue
+
+        if len(word) <= 1:
+            continue
+
+        terms.append(word)
+
+        for synonym in RECOMMENDATION_SYNONYMS.get(word, []):
+            terms.append(synonym)
+
+    return list(dict.fromkeys(terms))
+
+
+def product_search_text(product):
+    return normalize_loan_lookup_text(
+        " ".join([
+            product.get("name", ""),
+            product.get("category", ""),
+            " ".join(product.get("aliases", [])),
+        ]),
+    )
+
+
+def score_product_recommendation(product, query_terms):
+    if not query_terms:
+        return 0
+
+    searchable_text = product_search_text(product)
+    score = 0
+
+    for term in query_terms:
+        if contains_loan_lookup_phrase(searchable_text, term):
+            score += 80
+        elif term in searchable_text:
+            score += 25
+
+    product_name = normalize_loan_lookup_text(product.get("name", ""))
+
+    for term in query_terms:
+        if term in product_name:
+            score += 40
+
+    return score
+
+
+def ranked_recommendation_products(products, user_message, search_query="", limit=3):
+    query_terms = get_recommendation_query_terms(user_message, search_query)
+    ranked_products = []
+
+    for product in products:
+        score = score_product_recommendation(product, query_terms)
+
+        if score > 0:
+            ranked_products.append((score, product))
+
+    ranked_products.sort(key=lambda item: item[0], reverse=True)
+
+    return [product for _, product in ranked_products[:limit]]
+
+
+def format_recommendation_reply(title, products, detail_builder, missing_reply):
+    if not products:
+        return missing_reply
+
+    reply_parts = [title]
+
+    for index, product in enumerate(products, start=1):
+        detail_lines = [
+            line
+            for line in detail_builder(product)
+            if normalize_loan_lookup_text(line).rstrip("-:") not in {
+                "best for you if you are",
+                "best for you if you",
+                "key features",
+                "features",
+            }
+        ]
+        detail_text = ""
+
+        if detail_lines:
+            detail_text = "\nRecommended because:\n" + "\n".join(
+                f"- {line}" for line in detail_lines[:3]
+            )
+
+        reply_parts.append(
+            f"{index}. {product['name']}{detail_text}\nLink: {product['url']}"
+        )
+
+    return "\n\n".join(reply_parts)
+
+
+def get_loan_recommendation_detail_lines(product):
+    page_text = get_loan_product_page_text(product)
+
+    if product["category"] == "sme":
+        section_text = slice_sme_loan_section(page_text, product["name"])
+    else:
+        section_text = slice_retail_loan_section(page_text, product["name"])
+
+    return build_loan_feature_bullets(
+        section_text,
+        product["name"],
+        max_bullets=3,
+        stop_before_eligibility=product["category"] != "sme",
+    )
+
+
+def build_loan_recommendation_reply(user_message, search_query=""):
+    if not is_recommendation_question(user_message, search_query):
+        return ""
+
+    normalized_message = normalize_loan_lookup_text(f"{user_message}\n{search_query}")
+    loan_context_words = {
+        "loan",
+        "loans",
+        "oan",
+        "oans",
+        "loam",
+        "lone",
+        "finance",
+        "financing",
+        "credit",
+    }
+
+    if not any(word in normalized_message.split() for word in loan_context_words):
+        return ""
+
+    products = ranked_recommendation_products(
+        LOAN_PRODUCT_RULES,
+        user_message,
+        search_query,
+        limit=3,
+    )
+
+    return format_recommendation_reply(
+        "Based on your preference, suitable EBL loan option(s):",
+        products,
+        get_loan_recommendation_detail_lines,
+        (
+            "I could not find a matching EBL loan recommendation from the "
+            "current knowledge base. Please tell me your purpose, for example "
+            "home, auto, education, personal, women, salaried, or SME business."
+        ),
+    )
+
+
+def build_loan_router_reply(user_message, intent, history, search_query=""):
     schedule_context = detect_loan_schedule_from_category_prompt(history)
 
     if schedule_context == "Retail":
@@ -5057,12 +5654,23 @@ def build_loan_router_reply(user_message, intent, history):
     product = detect_specific_loan_product(user_message)
 
     if product:
+        if should_bypass_generic_product_reply(user_message, search_query):
+            return ""
+
         return build_specific_loan_reply(product)
 
     retail_subcategory_reply = build_retail_loan_subcategory_reply(user_message)
 
     if retail_subcategory_reply:
         return retail_subcategory_reply
+
+    loan_recommendation_reply = build_loan_recommendation_reply(
+        user_message,
+        search_query,
+    )
+
+    if loan_recommendation_reply:
+        return loan_recommendation_reply
 
     if intent == "loan_information":
         if category:
@@ -6036,6 +6644,45 @@ def build_specific_account_reply(product):
     )
 
 
+def get_account_recommendation_detail_lines(product):
+    page_text = get_account_product_page_text(product)
+
+    if product["category"] == "sme_deposit":
+        section_text = slice_sme_account_section(page_text, product["name"])
+    else:
+        section_text = slice_retail_account_section(page_text, product["name"])
+
+    return build_account_feature_bullets(
+        section_text,
+        product["name"],
+        max_bullets=3,
+    )
+
+
+def build_account_recommendation_reply(user_message, search_query=""):
+    if not is_recommendation_question(user_message, search_query):
+        return ""
+
+    products = ranked_recommendation_products(
+        ACCOUNT_PRODUCT_RULES,
+        user_message,
+        search_query,
+        limit=3,
+    )
+
+    return format_recommendation_reply(
+        "Based on your preference, suitable EBL account/deposit option(s):",
+        products,
+        get_account_recommendation_detail_lines,
+        (
+            "I could not find a matching EBL account recommendation from the "
+            "current knowledge base. Please tell me your profile or purpose, "
+            "for example student, women, senior, savings, current, SME, Islamic, "
+            "DPS, or fixed deposit."
+        ),
+    )
+
+
 def build_specific_account_documents_reply(product, user_message):
     page_text = get_account_product_page_text(product)
 
@@ -6064,6 +6711,9 @@ def build_account_router_reply(user_message, intent, history, search_query=""):
                     or is_document_question(search_query)
                 ):
                     return build_specific_account_documents_reply(product, user_message)
+
+                if should_bypass_generic_product_reply(user_message, search_query):
+                    return ""
 
                 return build_specific_account_reply(product)
 
@@ -6099,6 +6749,9 @@ def build_account_router_reply(user_message, intent, history, search_query=""):
         if is_document_question(user_message) or is_document_question(search_query):
             return build_specific_account_documents_reply(product, user_message)
 
+        if should_bypass_generic_product_reply(user_message, search_query):
+            return ""
+
         return build_specific_account_reply(product)
 
     product = detect_specific_account_product(user_message)
@@ -6106,6 +6759,9 @@ def build_account_router_reply(user_message, intent, history, search_query=""):
     if product:
         if is_document_question(user_message) or is_document_question(search_query):
             return build_specific_account_documents_reply(product, user_message)
+
+        if should_bypass_generic_product_reply(user_message, search_query):
+            return ""
 
         return build_specific_account_reply(product)
 
@@ -6128,6 +6784,14 @@ def build_account_router_reply(user_message, intent, history, search_query=""):
 
         if product:
             return build_specific_account_reply(product)
+
+    account_recommendation_reply = build_account_recommendation_reply(
+        user_message,
+        search_query,
+    )
+
+    if account_recommendation_reply:
+        return account_recommendation_reply
 
     segment = detect_account_segment(user_message)
     category = detect_account_category(user_message)
@@ -6936,13 +7600,206 @@ def build_specific_card_reply(product):
     return reply
 
 
+def get_card_recommendation_detail_lines(product):
+    listing_bullets = build_card_listing_feature_bullets(product, max_bullets=3)
+
+    if listing_bullets:
+        return listing_bullets
+
+    page_text = get_card_product_page_text(product)
+    section_text = slice_card_section(page_text, product["name"])
+
+    return build_card_feature_bullets(
+        section_text,
+        product["name"],
+        max_bullets=3,
+    )
+
+
+def build_card_recommendation_reply(user_message, search_query=""):
+    if not is_recommendation_question(user_message, search_query):
+        return ""
+
+    normalized_message = normalize_loan_lookup_text(f"{user_message}\n{search_query}")
+    card_context_words = {
+        "card",
+        "cards",
+        "credit",
+        "debit",
+        "prepaid",
+        "visa",
+        "mastercard",
+        "unionpay",
+        "diners",
+    }
+
+    if not any(word in normalized_message.split() for word in card_context_words):
+        return ""
+
+    products = ranked_recommendation_products(
+        CARD_PRODUCT_RULES,
+        user_message,
+        search_query,
+        limit=3,
+    )
+
+    return format_recommendation_reply(
+        "Based on your preference, suitable EBL card option(s):",
+        products,
+        get_card_recommendation_detail_lines,
+        (
+            "I could not find a matching EBL card recommendation from the "
+            "current knowledge base. Please tell me your preference, for example "
+            "student, women, travel, business, debit, credit, prepaid, or Islamic."
+        ),
+    )
+
+
+def is_student_card_recommendation_question(message):
+    normalized_message = normalize_loan_lookup_text(message)
+    words = set(normalized_message.split())
+
+    if "card" not in words:
+        return False
+
+    if "student" not in words and "campus" not in words:
+        return False
+
+    if (
+        is_fee_or_charge_question(message)
+        or has_rate_word(message)
+        or is_document_question(message)
+        or (
+            is_case_specific_detail_question(message)
+            and get_case_detail_type(message) != "recommendation"
+        )
+    ):
+        return False
+
+    recommendation_phrases = [
+        "which card",
+        "what card",
+        "best card",
+        "perfect card",
+        "suitable card",
+        "recommend card",
+        "suggest card",
+        "card for me",
+        "card will be perfect",
+        "card would be perfect",
+        "card is perfect",
+        "card is suitable",
+        "kon card",
+        "card bhalo",
+        "card valo",
+        "card better",
+        "student card",
+    ]
+
+    return any(phrase in normalized_message for phrase in recommendation_phrases)
+
+
+def get_account_product_rule_by_name(product_name):
+    normalized_name = normalize_loan_lookup_text(product_name)
+
+    for product in ACCOUNT_PRODUCT_RULES:
+        if normalize_loan_lookup_text(product["name"]) == normalized_name:
+            return product
+
+    return None
+
+
+def build_student_card_recommendation_reply(user_message):
+    if not is_student_card_recommendation_question(user_message):
+        return ""
+
+    product = get_account_product_rule_by_name("EBL Campus Account")
+
+    if not product:
+        return (
+            "I could not find a student-specific card recommendation in the "
+            "current EBL knowledge base. Please contact EBL support for the "
+            "most suitable card option."
+        )
+
+    page_text = get_account_product_page_text(product)
+    section_text = slice_retail_account_section(page_text, product["name"])
+    feature_bullets = build_account_feature_bullets(
+        section_text,
+        product["name"],
+        max_bullets=12,
+    )
+    preferred_feature_keywords = [
+        "dual currency debit card",
+        "atm",
+        "internet banking",
+        "minimum balance fee",
+        "account maintenance fee",
+        "initial deposit",
+    ]
+    selected_features = []
+
+    for bullet in feature_bullets:
+        normalized_bullet = normalize_loan_lookup_text(bullet)
+
+        if any(keyword in normalized_bullet for keyword in preferred_feature_keywords):
+            selected_features.append(bullet)
+
+    detail_lines = normalize_account_detail_lines(section_text)
+    eligibility_lines = [
+        line
+        for line in detail_lines
+        if "student aged" in normalize_loan_lookup_text(line)
+        or "eligible to open ebl campus account" in normalize_loan_lookup_text(line)
+    ]
+
+    if not selected_features:
+        selected_features = feature_bullets[:5]
+
+    if not selected_features:
+        return (
+            "For students, the current EBL knowledge base points to EBL Campus "
+            f"Account. Link: {product['url']}"
+        )
+
+    feature_text = "\n".join(f"- {feature}" for feature in selected_features[:6])
+    reply = (
+        "For students, a suitable EBL option is EBL Campus Account with "
+        "Dual Currency Debit Card facility.\n\n"
+        f"Why it fits students:\n{feature_text}"
+    )
+
+    if eligibility_lines:
+        eligibility_text = "\n".join(
+            f"- {line}" for line in eligibility_lines[:2]
+        )
+        reply += f"\n\nEligibility:\n{eligibility_text}"
+
+    reply += f"\n\nLink: {product['url']}"
+
+    return reply
+
+
 def build_card_router_reply(user_message, intent, history):
+    student_card_reply = build_student_card_recommendation_reply(user_message)
+
+    if student_card_reply:
+        return student_card_reply
+
+    card_recommendation_reply = build_card_recommendation_reply(user_message)
+
+    if card_recommendation_reply:
+        return card_recommendation_reply
+
     product = detect_specific_card_product(user_message)
 
-    if product:
+    if product and not should_bypass_generic_product_reply(user_message):
         return build_specific_card_reply(product)
 
     category = detect_card_category(user_message)
+
+    if should_bypass_generic_product_reply(user_message):
+        return ""
 
     if intent == "card_information":
         if category:
@@ -6961,6 +7818,7 @@ def is_specific_card_product_information_request(message):
         detect_specific_card_product(message)
         and not is_fee_or_charge_question(message)
         and not has_rate_word(message)
+        and not should_bypass_generic_product_reply(message)
     )
 
 
@@ -9129,6 +9987,10 @@ def chat(request: ChatRequest):
     history_limit = 2 if is_charge_query else 4
     history = get_chat_history(session_id, limit=history_limit)
     has_previous_history = len(history) > 0
+    session_summary = limit_text(
+        get_session_summary(session_id),
+        SESSION_SUMMARY_LIMIT,
+    )
 
     card_router_reply = ""
 
@@ -9147,7 +10009,12 @@ def chat(request: ChatRequest):
     loan_router_reply = ""
 
     if not is_charge_query:
-        loan_router_reply = build_loan_router_reply(user_message, intent, history)
+        loan_router_reply = build_loan_router_reply(
+            user_message,
+            intent,
+            history,
+            search_query,
+        )
 
     if loan_router_reply:
         return save_and_build_response(
@@ -9211,6 +10078,30 @@ def chat(request: ChatRequest):
             or is_broad_account_opening_question(search_query)
         )
     )
+    case_specific_retrieval_query = build_case_specific_retrieval_query(
+        user_message,
+        search_query,
+        history,
+        session_summary,
+    )
+    case_detail_type = get_case_detail_type(user_message, search_query)
+    case_product_context = resolve_case_product_context(
+        user_message,
+        search_query,
+        history,
+        session_summary,
+    )
+    case_specific_context_note = combine_context_sections(
+        build_case_specific_context_note(
+            user_message,
+            search_query,
+            case_specific_retrieval_query,
+        ),
+        build_resolved_case_product_note(
+            case_product_context,
+            case_detail_type,
+        ),
+    )
 
     local_knowledge_search_limit = 1 if is_charge_query else 3
     local_knowledge_snippet_limit = (
@@ -9226,7 +10117,7 @@ def chat(request: ChatRequest):
 
     local_knowledge_info = limit_text(
         search_local_knowledge(
-            f"{user_message}\n{search_query}",
+            case_specific_retrieval_query,
             limit=local_knowledge_search_limit,
             max_snippet_characters=local_knowledge_snippet_limit,
         ),
@@ -9307,7 +10198,7 @@ def chat(request: ChatRequest):
 
     else:
         website_page_info = limit_text(
-            search_website_information(search_query, limit=5),
+            search_website_information(case_specific_retrieval_query, limit=5),
             website_page_context_limit,
         )
 
@@ -9329,16 +10220,44 @@ def chat(request: ChatRequest):
 
     website_info = limit_text(
         combine_context_sections(
+            case_specific_context_note,
             local_knowledge_info,
             website_page_info,
         ),
         final_context_limit,
     )
 
-    session_summary = limit_text(
-        get_session_summary(session_id),
-        SESSION_SUMMARY_LIMIT,
+    if (
+        case_detail_type == "process"
+        and not has_case_specific_process_evidence(
+            website_info,
+            case_specific_retrieval_query,
+        )
+    ):
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=build_case_specific_missing_information_reply(
+                user_message,
+                case_specific_retrieval_query,
+            ),
+            source="website-retrieval",
+            status="not_found",
+        )
+
+    endorsement_document_reply = build_endorsement_document_reply(
+        user_message,
+        website_info,
     )
+
+    if endorsement_document_reply:
+        return save_and_build_response(
+            session_id=session_id,
+            user_message=user_message,
+            reply=endorsement_document_reply,
+            source="website-retrieval",
+            status="answered",
+        )
 
     required_documents_reply = ""
 
@@ -9370,6 +10289,18 @@ def chat(request: ChatRequest):
     except Exception as error:
         print("GROQ ERROR:", repr(error))
 
+        if case_detail_type != "general":
+            return save_and_build_response(
+                session_id=session_id,
+                user_message=user_message,
+                reply=build_case_specific_missing_information_reply(
+                    user_message,
+                    case_specific_retrieval_query,
+                ),
+                source="website-retrieval",
+                status="not_found",
+            )
+
         return save_and_build_response(
             session_id=session_id,
             user_message=user_message,
@@ -9378,7 +10309,25 @@ def chat(request: ChatRequest):
             status="error",
         )
 
+    if is_case_specific_detail_question(user_message) and not reply.strip():
+        reply = build_case_specific_missing_information_reply(
+            user_message,
+            case_specific_retrieval_query,
+        )
+
+    if is_case_specific_detail_question(user_message) and is_case_specific_generic_contact_reply(reply):
+        reply = build_case_specific_missing_information_reply(
+            user_message,
+            case_specific_retrieval_query,
+        )
+
     reply = clean_bank_contact_information(reply)
+
+    if is_case_specific_detail_question(user_message) and is_case_specific_generic_contact_reply(reply):
+        reply = build_case_specific_missing_information_reply(
+            user_message,
+            case_specific_retrieval_query,
+        )
 
     response = save_and_build_response(
         session_id=session_id,
