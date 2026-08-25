@@ -414,9 +414,16 @@ function LauncherRobotIcon({
         r="43"
         fill="white"
         stroke="currentColor"
-        strokeWidth="3.2"
+        strokeWidth="2.6"
       />
       <circle cx="50" cy="50" r="34" fill="#EAF4FB" />
+      <path
+        d="M50 28v8"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+      <circle cx="50" cy="25" r="3.2" fill="currentColor" />
       <rect
         x="31"
         y="36"
@@ -424,7 +431,7 @@ function LauncherRobotIcon({
         height="29"
         rx="9"
         stroke="currentColor"
-        strokeWidth="3.1"
+        strokeWidth="2.6"
       />
       <rect
         x="25"
@@ -433,7 +440,7 @@ function LauncherRobotIcon({
         height="14"
         rx="3"
         stroke="currentColor"
-        strokeWidth="3.1"
+        strokeWidth="2.6"
       />
       <rect
         x="69"
@@ -442,30 +449,34 @@ function LauncherRobotIcon({
         height="14"
         rx="3"
         stroke="currentColor"
-        strokeWidth="3.1"
+        strokeWidth="2.6"
+      />
+      <rect
+        x="36"
+        y="44"
+        width="28"
+        height="18"
+        rx="8"
+        fill="white"
+        stroke="currentColor"
+        strokeWidth="2.2"
+      />
+      <circle cx="44" cy="53" r="2.2" fill="currentColor" />
+      <circle cx="56" cy="53" r="2.2" fill="currentColor" />
+      <path
+        d="M47 58h6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
       />
       <path
-        d="M39 44h22"
+        d="M31 58v8c0 4.6 3.2 7 8 7h4"
         stroke="currentColor"
         strokeWidth="2.6"
         strokeLinecap="round"
-      />
-      <circle cx="43" cy="53" r="2.5" fill="currentColor" />
-      <circle cx="57" cy="53" r="2.5" fill="currentColor" />
-      <path
-        d="M47 59.5h6"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M44 72h7.5c5.2 0 8.5-2.6 8.5-7.5"
-        stroke="currentColor"
-        strokeWidth="3.1"
-        strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <rect x="35" y="68" width="10" height="7" rx="3.5" fill="currentColor" />
+      <rect x="34" y="69.5" width="10" height="7" rx="3.5" fill="currentColor" />
     </svg>
   );
 }
@@ -1212,75 +1223,98 @@ function renderOngoingOffersCarouselContent(
   const hasMultipleOffers = offers.length > 1;
 
   const arrowButtonClass =
-    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#005B96]/15 bg-[#F7FBFD] text-base font-bold text-[#005B96]/75 shadow-sm transition hover:border-[#FFC629] hover:bg-[#FFF4C2] hover:text-[#005B96] focus:outline-none focus:ring-2 focus:ring-[#FFC629]/45 disabled:cursor-not-allowed disabled:opacity-30";
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#CFE0EA] bg-[#F7FBFD] text-base font-bold text-[#005B96] shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[#FFC629] hover:bg-[#FFF4C2] hover:shadow-md active:translate-y-0 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#FFC629]/45 disabled:cursor-not-allowed disabled:opacity-30";
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-xl border border-[#D7E5EC] bg-white text-[#123047] shadow-sm">
-        <div className="bg-white">
-          {offer.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={offer.image}
-              alt={offer.title}
-              className="block h-auto w-full"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-32 items-center justify-center bg-[#F6FAFC] px-10 text-center text-xs font-semibold text-[#005B96]">
-              {formatMessage(offer.title)}
-            </div>
-          )}
+      {hasMultipleOffers ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0"
+        >
+          {offers
+            .filter((offerItem) => offerItem.image)
+            .map((offerItem) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={`preload-${offerItem.image}`}
+                src={offerItem.image}
+                alt=""
+                loading="eager"
+              />
+            ))}
         </div>
-        <div className="space-y-1.5 px-3 py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {hasMultipleOffers ? (
-              <button
-                type="button"
-                onClick={() => onPrevious(offers.length)}
-                className={arrowButtonClass}
-                aria-label="Previous offer"
-                title="Previous offer"
-              >
-                {"<"}
-              </button>
+      ) : null}
+      <div className="overflow-hidden rounded-xl border border-[#D7E5EC] bg-white text-[#123047] shadow-sm">
+        <div
+          key={`${offer.title}-${offerIndex}`}
+          className="animate-ebl-offer-swap transform-gpu will-change-transform"
+        >
+          <div className="bg-white">
+            {offer.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={offer.image}
+                alt={offer.title}
+                className="block h-auto w-full transition-opacity duration-300 ease-out"
+                loading={hasMultipleOffers ? "eager" : "lazy"}
+              />
+            ) : (
+              <div className="flex h-32 items-center justify-center bg-[#F6FAFC] px-10 text-center text-xs font-semibold text-[#005B96]">
+                {formatMessage(offer.title)}
+              </div>
+            )}
+          </div>
+          <div className="space-y-1.5 px-3 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              {hasMultipleOffers ? (
+                <button
+                  type="button"
+                  onClick={() => onPrevious(offers.length)}
+                  className={arrowButtonClass}
+                  aria-label="Previous offer"
+                  title="Previous offer"
+                >
+                  {"<"}
+                </button>
+              ) : null}
+              <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#123047] [overflow-wrap:anywhere]">
+                {formatMessage(offer.title)}
+              </p>
+              {hasMultipleOffers ? (
+                <button
+                  type="button"
+                  onClick={() => onNext(offers.length)}
+                  className={arrowButtonClass}
+                  aria-label="Next offer"
+                  title="Next offer"
+                >
+                  {">"}
+                </button>
+              ) : null}
+            </div>
+            {offer.description ? (
+              <p className="line-clamp-2 text-xs leading-5 text-gray-500">
+                {formatMessage(offer.description)}
+              </p>
             ) : null}
-            <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#123047] [overflow-wrap:anywhere]">
-              {formatMessage(offer.title)}
-            </p>
             {hasMultipleOffers ? (
-              <button
-                type="button"
-                onClick={() => onNext(offers.length)}
-                className={arrowButtonClass}
-                aria-label="Next offer"
-                title="Next offer"
-              >
-                {">"}
-              </button>
+              <p className="text-center text-[11px] font-semibold text-gray-400">
+                {offerIndex + 1} of {offers.length}
+              </p>
             ) : null}
           </div>
-          {offer.description ? (
-            <p className="line-clamp-2 text-xs leading-5 text-gray-500">
-              {formatMessage(offer.description)}
-            </p>
-          ) : null}
-          {hasMultipleOffers ? (
-            <p className="text-center text-[11px] font-semibold text-gray-400">
-              {offerIndex + 1} of {offers.length}
-            </p>
-          ) : null}
-        </div>
-        <div className="divide-y divide-gray-100 border-t border-gray-100">
-          <a
-            href={offer.details || "https://www.ebl.com.bd/whats-new"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-[#005B96] transition hover:bg-[#FFF8D8]"
-          >
-            <span>Offer Details</span>
-            <ExternalLinkIcon className="h-3.5 w-3.5" />
-          </a>
+          <div className="divide-y divide-gray-100 border-t border-gray-100">
+            <a
+              href={offer.details || "https://www.ebl.com.bd/whats-new"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-[#005B96] transition hover:bg-[#FFF8D8]"
+            >
+              <span>Offer Details</span>
+              <ExternalLinkIcon className="h-3.5 w-3.5" />
+            </a>
+          </div>
         </div>
       </div>
       {hasMultipleOffers ? (
@@ -1290,10 +1324,10 @@ function renderOngoingOffersCarouselContent(
               key={`${offerItem.title}-dot-${index}`}
               type="button"
               onClick={() => onSelect(index)}
-              className={`h-1.5 rounded-full transition ${
+              className={`h-1.5 rounded-full transition-all duration-200 ease-out ${
                 index === offerIndex
                   ? "w-5 bg-[#FFC629]"
-                  : "w-1.5 bg-white/60 hover:bg-white"
+                  : "w-1.5 bg-[#CFE0EA] hover:bg-[#8DB4CA]"
               }`}
               aria-label={`Show offer ${index + 1}`}
               title={`Show offer ${index + 1}`}
@@ -3386,6 +3420,23 @@ export default function Chatbot() {
           }
         }
 
+        @keyframes ebl-offer-swap {
+          from {
+            opacity: 0;
+            filter: blur(0.5px);
+            transform: translate3d(10px, 0, 0) scale(0.992);
+          }
+          65% {
+            opacity: 0.92;
+            filter: blur(0);
+          }
+          to {
+            opacity: 1;
+            filter: blur(0);
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+        }
+
         .animate-ebl-widget-in {
           animation: ebl-widget-in 180ms ease-out both;
         }
@@ -3416,6 +3467,10 @@ export default function Chatbot() {
           animation: ebl-service-in 160ms ease-out both;
         }
 
+        .animate-ebl-offer-swap {
+          animation: ebl-offer-swap 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .animate-ebl-widget-in,
           .animate-ebl-widget-out,
@@ -3423,7 +3478,8 @@ export default function Chatbot() {
           .animate-ebl-panel-forward-in,
           .animate-ebl-panel-back-in,
           .animate-ebl-control-in,
-          .animate-ebl-service-in {
+          .animate-ebl-service-in,
+          .animate-ebl-offer-swap {
             animation: none;
           }
         }
