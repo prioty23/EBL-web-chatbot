@@ -396,6 +396,80 @@ function RobotIcon({ className = "h-7 w-7" }: { className?: string }) {
   );
 }
 
+function LauncherRobotIcon({
+  className = "h-12 w-12",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 100 100"
+      className={className}
+      fill="none"
+    >
+      <circle
+        cx="50"
+        cy="50"
+        r="43"
+        fill="white"
+        stroke="currentColor"
+        strokeWidth="3.2"
+      />
+      <circle cx="50" cy="50" r="34" fill="#EAF4FB" />
+      <rect
+        x="31"
+        y="36"
+        width="38"
+        height="29"
+        rx="9"
+        stroke="currentColor"
+        strokeWidth="3.1"
+      />
+      <rect
+        x="25"
+        y="45"
+        width="6"
+        height="14"
+        rx="3"
+        stroke="currentColor"
+        strokeWidth="3.1"
+      />
+      <rect
+        x="69"
+        y="45"
+        width="6"
+        height="14"
+        rx="3"
+        stroke="currentColor"
+        strokeWidth="3.1"
+      />
+      <path
+        d="M39 44h22"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+      <circle cx="43" cy="53" r="2.5" fill="currentColor" />
+      <circle cx="57" cy="53" r="2.5" fill="currentColor" />
+      <path
+        d="M47 59.5h6"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M44 72h7.5c5.2 0 8.5-2.6 8.5-7.5"
+        stroke="currentColor"
+        strokeWidth="3.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect x="35" y="68" width="10" height="7" rx="3.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 function QuickActionIcon({
   action,
   className = "h-4 w-4",
@@ -3184,16 +3258,16 @@ export default function Chatbot() {
   const renderTypingIndicator = () => (
     <div
       className="animate-ebl-message-in flex items-center gap-2"
-      aria-label="Eastern Bank PLC AI Assistant is typing"
+      aria-label="Eastern Bank PLC. AI Assistant is typing"
       aria-live="polite"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#005B96] bg-white">
-        <RobotIcon className="h-7 w-7 text-[#005B96]" />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#005B96]/25 bg-white">
+        <RobotIcon className="h-6 w-6 text-[#005B96]" />
       </div>
-      <div className="flex items-center gap-1 rounded-2xl bg-white px-3 py-3 shadow-sm">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FFC629]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FFC629] [animation-delay:120ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FFC629] [animation-delay:240ms]" />
+      <div className="flex items-center gap-1 rounded-[1.25rem] bg-white/90 px-3 py-2.5 shadow-sm">
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#005B96]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#005B96] [animation-delay:120ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#005B96] [animation-delay:240ms]" />
       </div>
     </div>
   );
@@ -3211,7 +3285,7 @@ export default function Chatbot() {
       aria-live="polite"
     >
       <p className="mb-1 ml-1 text-xs font-medium text-[#005B96]">
-        Eastern Bank PLC
+        Eastern Bank PLC.
       </p>
       <div className="inline-flex max-w-[88%] items-center gap-2 rounded-2xl border border-[#C8D8DD] bg-[#EEF4F6] px-4 py-3 text-sm font-medium leading-6 text-[#223A42] shadow-sm">
         <span>EBL Support Agent is typing...</span>
@@ -3366,14 +3440,10 @@ export default function Chatbot() {
 
           openChatbot();
         }}
-        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#FFC629] p-1 text-white shadow-2xl shadow-[#005B96]/30 ring-2 ring-[#005B96]/40 transition duration-200 hover:-translate-y-0.5 hover:bg-[#F4BC20] hover:shadow-[#005B96]/40 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#005B96] sm:bottom-6 sm:right-6 sm:h-16 sm:w-16 sm:p-1.5"
+        className="group fixed bottom-5 right-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#EAF4FB] text-[#005B96] shadow-2xl shadow-[#005B96]/25 transition duration-200 hover:-translate-y-0.5 hover:bg-[#DDECF7] hover:shadow-[#005B96]/35 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#005B96] focus-visible:ring-offset-2 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
         aria-label={isOpen ? chatbotText.close : chatbotText.open}
       >
-        <span className="flex h-full w-full items-center justify-center rounded-full bg-[#005B96] p-1.5 transition group-hover:bg-[#004C7D]">
-          <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-[#005B96] shadow-inner transition group-hover:bg-[#FFF8D8]">
-            <RobotIcon className="h-7 w-7 text-[#005B96] sm:h-8 sm:w-8" />
-          </span>
-        </span>
+        <LauncherRobotIcon className="h-full w-full text-[#005B96]" />
         <span className="pointer-events-none absolute bottom-full right-0 mb-3 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100">
           Chatbot
         </span>
@@ -3389,31 +3459,30 @@ export default function Chatbot() {
           aria-hidden={isWidgetClosing}
         >
           <div
-            className="relative flex flex-col overflow-hidden rounded-[1.25rem] border border-[#005B96]/10 bg-white shadow-2xl shadow-black/15 transition-[height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            className="relative flex flex-col overflow-hidden rounded-[1.35rem] bg-[#DDECF7] shadow-2xl shadow-black/20 transition-[height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
               height: hasStartedConversation
                 ? "min(520px, calc(100dvh - 2rem))"
                 : "min(340px, calc(100dvh - 2rem))",
             }}
           >
-            <div className="flex shrink-0 items-center justify-between gap-3 bg-[#005B96] px-4 py-3 text-white sm:px-5">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold sm:text-base">
-                    {chatbotText.title}
-                  </p>
-                  <p className="mt-1 text-sm text-blue-100">
-                    {chatbotText.status}
-                  </p>
-                </div>
+            <div className="flex shrink-0 items-center justify-between gap-3 bg-[#EAF4FB] px-3 py-2.5 text-[#005B96] sm:px-4">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold leading-5">
+                  Eastern Bank PLC.
+                </p>
+                <p className="truncate text-[11px] font-medium leading-4 text-[#005B96]/80">
+                  AI Assistant
+                </p>
+                <p className="sr-only">{chatbotText.status}</p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5">
                 {canGoBackToIntro ? (
                   <button
                     type="button"
                     onClick={handleBackToIntro}
-                    className="animate-ebl-control-in inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg font-semibold leading-none ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:bg-white/20 active:scale-[0.96]"
+                    className="animate-ebl-control-in inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-lg font-semibold leading-none text-[#005B96] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#F3F9FD] active:scale-[0.96]"
                     aria-label="Back to start"
                     title="Back to start"
                   >
@@ -3424,7 +3493,7 @@ export default function Chatbot() {
                 <button
                   type="button"
                   onClick={minimizeChatbot}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 transition duration-200 hover:-translate-y-0.5 hover:bg-white/20 active:scale-[0.96]"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#005B96] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#F3F9FD] active:scale-[0.96]"
                   aria-label="Minimize chatbot"
                   title="Minimize chatbot"
                 >
@@ -3436,7 +3505,7 @@ export default function Chatbot() {
                     type="button"
                     onClick={() => setShowEndConfirmation(true)}
                     disabled={isLoading}
-                    className="rounded-full bg-white/10 px-3 py-2 text-xs font-medium transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-full bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#005B96] shadow-sm transition hover:bg-[#F3F9FD] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     End
                   </button>
@@ -3447,7 +3516,7 @@ export default function Chatbot() {
             {hasStartedConversation ? (
               <div
                 key="conversation-view"
-                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col bg-white px-4 py-4 sm:px-5`}
+                className={`${panelAnimationClass} flex min-h-0 flex-1 flex-col bg-[#DDECF7] px-4 py-4 sm:px-5`}
               >
                 <div
                   ref={messageListRef}
@@ -3488,8 +3557,8 @@ export default function Chatbot() {
                         style={{ animationDelay: `${Math.min(index, 4) * 18}ms` }}
                       >
                         {message.role === "bot" && !isMenuOnlyMessage ? (
-                          <p className="mb-1 ml-1 text-xs font-medium text-[#005B96]">
-                            Eastern Bank PLC
+                          <p className="mb-1 ml-1 text-[11px] font-semibold text-[#005B96]">
+                            Eastern Bank PLC.
                           </p>
                         ) : null}
                         {!isMenuOnlyMessage ? (
@@ -3498,16 +3567,16 @@ export default function Chatbot() {
                               isCorporateTableMessage ||
                               isComplaintCellMessage ||
                               isOngoingOffersMessage
-                                ? "max-w-full rounded-xl px-2.5 py-2.5"
-                                : "max-w-[88%] rounded-2xl px-4 py-3"
+                                ? "max-w-full rounded-[1.1rem] px-2.5 py-2.5"
+                                : "max-w-[88%] rounded-[1.35rem] px-4 py-3"
                             } min-w-0 break-words text-sm leading-6 shadow-sm [overflow-wrap:anywhere] ${
                               message.role === "bot"
                                 ? isHumanSupportEndedBotMessage
                                   ? "border border-[#F0C84B] bg-[#FFF8D8] font-semibold text-[#4B3A00]"
                                   : isHumanSupportBotMessage
                                     ? "border border-[#C8D8DD] bg-[#EEF4F6] font-medium text-[#223A42]"
-                                    : "bg-[#005B96] text-white"
-                                : "ml-auto border border-[#B8D4E8] bg-[#EAF3FA] text-[#123047]"
+                                    : "bg-white/95 text-[#123047]"
+                                : "ml-auto bg-[#005B96] text-white"
                             }`}
                           >
                             {isComplaintCellMessage
@@ -3583,7 +3652,7 @@ export default function Chatbot() {
 
                 <form
                   onSubmit={handleSubmit}
-                  className="mt-4 flex items-center gap-3"
+                  className="mt-4 flex items-center gap-2 border-t border-white/70 pt-3"
                 >
                   <input
                     ref={inputRef}
@@ -3597,13 +3666,13 @@ export default function Chatbot() {
                     }
                     aria-label={chatbotText.placeholder}
                     disabled={isLoading || humanSupportStep === "details"}
-                    className="min-w-0 flex-1 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition duration-200 focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-w-0 flex-1 rounded-full border border-white/80 bg-white px-4 py-2.5 text-sm text-gray-700 outline-none shadow-sm transition duration-200 focus:border-[#005B96] focus:ring-2 focus:ring-[#005B96]/15 disabled:cursor-not-allowed disabled:opacity-60"
                   />
 
                   <button
                     type="submit"
                     disabled={isLoading || humanSupportStep === "details"}
-                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#005B96] text-white shadow-lg shadow-[#005B96]/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#004C7D] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#005B96]/25 bg-white text-[#005B96] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#F3F9FD] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
                     aria-label={chatbotText.send}
                   >
                     <SendIcon />
