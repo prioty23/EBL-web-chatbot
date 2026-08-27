@@ -87,7 +87,7 @@ export const translations = {
       actions: ["Transfer", "Pay Bills", "Insights"],
       stats: [
         ["1M+", "Customers", "Banking with confidence"],
-        ["120+", "Branches", "Across the country"],
+        ["85", "Branches", "Across the country"],
         ["24/7", "Digital Support", "Help when you need it"],
         ["Secure", "Banking", "Protected at every step"],
       ],
