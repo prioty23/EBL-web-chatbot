@@ -2953,7 +2953,7 @@ export default function Chatbot() {
         disabled={isLoading}
         className={
           isMainAction
-            ? `${isWideMainAction ? "col-span-2" : ""} flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-full border border-[#005B96]/40 bg-white px-2.5 py-2 text-center text-[11px] font-semibold leading-tight text-[#004C7D] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#FFC629]/80 hover:bg-[#FFF8D8] hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100`
+            ? `${isWideMainAction ? "col-span-2" : ""} flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-full border border-[#005B96]/40 bg-white px-2 py-2 text-center text-[11px] font-semibold leading-tight text-[#004C7D] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#FFC629]/80 hover:bg-[#FFF8D8] hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100`
             : isDistrictAction
               ? "group flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-xl border border-[#005B96]/20 bg-[#F3F8FC] px-3 py-2.5 text-left text-[13px] font-semibold leading-tight text-[#004C7D] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#FFC629]/80 hover:bg-[#FFF8D8] hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
             : "min-w-0 rounded-full border border-[#005B96]/15 bg-white px-3 py-2 text-sm font-medium text-[#005B96] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#FFC629]/80 hover:bg-[#FFF8D8] hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:active:scale-100"
@@ -2972,10 +2972,10 @@ export default function Chatbot() {
         <span
           className={
             isMainAction
-              ? "min-w-0 whitespace-nowrap"
+              ? "min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere]"
               : isDistrictAction
-              ? "min-w-0 flex-1 whitespace-nowrap"
-              : "min-w-0 flex-1 break-words [overflow-wrap:anywhere]"
+              ? "min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere]"
+              : "min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere]"
           }
         >
           {action}
@@ -3657,7 +3657,7 @@ export default function Chatbot() {
               >
                 <div
                   ref={messageListRef}
-                  className="ebl-chatbot-scaled-content min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
+                  className="ebl-chatbot-scaled-content min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto pr-1"
                 >
                   {messages.map((message, index) => {
                     const shouldShowQuickActions =
