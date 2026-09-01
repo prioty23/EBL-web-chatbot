@@ -2,7 +2,7 @@
 
 import { translations } from "@/data/translations";
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import type { ChangeEvent, CSSProperties, FormEvent, ReactNode } from "react";
 
 type Message = {
   role: "bot" | "user";
@@ -208,6 +208,9 @@ const COMPLAINT_CELL_DEFAULT_FOOTER =
 const SESSION_STORAGE_KEY = "eastern_ai_session_id";
 const BOT_RESPONSE_DELAY_MS = 1400;
 const WIDGET_CLOSE_ANIMATION_MS = 180;
+const CHATBOT_ZOOM_MIN = 0.7;
+const CHATBOT_ZOOM_MAX = 1.2;
+const CHATBOT_ZOOM_STEP = 0.1;
 const SCHEDULE_CHARGE_MENU_SOURCES = new Set([
   "schedule-charges-menu",
   "schedule-charges-category-menu",
@@ -313,6 +316,24 @@ function MinimizeIcon({ className = "h-5 w-5" }: { className?: string }) {
     >
       <path
         d="M6 12h12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function PlusIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+    >
+      <path
+        d="M12 6v12M6 12h12"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
@@ -1916,6 +1937,7 @@ function isScopedOptionMenuMessage(message: Message | null) {
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isWidgetClosing, setIsWidgetClosing] = useState(false);
+  const [chatbotZoom, setChatbotZoom] = useState(1);
   const [viewTransitionDirection, setViewTransitionDirection] =
     useState<ViewTransitionDirection>("forward");
   const [input, setInput] = useState("");
@@ -2158,6 +2180,16 @@ export default function Chatbot() {
       clearTimeout(widgetCloseTimerRef.current);
       widgetCloseTimerRef.current = null;
     }
+  };
+
+  const updateChatbotZoom = (direction: 1 | -1) => {
+    setChatbotZoom((currentZoom) => {
+      const nextZoom = Number(
+        (currentZoom + direction * CHATBOT_ZOOM_STEP).toFixed(2),
+      );
+
+      return Math.min(CHATBOT_ZOOM_MAX, Math.max(CHATBOT_ZOOM_MIN, nextZoom));
+    });
   };
 
   const openChatbot = () => {
@@ -3335,6 +3367,11 @@ export default function Chatbot() {
     viewTransitionDirection === "forward"
       ? "animate-ebl-panel-forward-in"
       : "animate-ebl-panel-back-in";
+  const canZoomOut = chatbotZoom > CHATBOT_ZOOM_MIN;
+  const canZoomIn = chatbotZoom < CHATBOT_ZOOM_MAX;
+  const chatbotZoomStyle = {
+    "--ebl-chatbot-zoom": chatbotZoom.toString(),
+  } as CSSProperties;
 
   return (
     <>
@@ -3471,6 +3508,26 @@ export default function Chatbot() {
           animation: ebl-offer-swap 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
+        .ebl-chatbot-zoom-shell {
+          max-width: calc(100vw - 1.5rem);
+          width: calc(100vw - 1.5rem);
+        }
+
+        .ebl-chatbot-zoom-content {
+          width: min(360px, calc(100vw - 1.5rem));
+        }
+
+        .ebl-chatbot-scaled-content {
+          zoom: var(--ebl-chatbot-zoom);
+        }
+
+        @media (min-width: 640px) {
+          .ebl-chatbot-zoom-shell {
+            max-width: 360px;
+            width: 360px;
+          }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .animate-ebl-widget-in,
           .animate-ebl-widget-out,
@@ -3507,15 +3564,16 @@ export default function Chatbot() {
 
       {isOpen || isWidgetClosing ? (
         <div
-          className={`fixed inset-x-3 bottom-4 z-40 max-w-[calc(100vw-1.5rem)] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[360px] sm:max-w-[360px] ${
+          className={`ebl-chatbot-zoom-shell fixed inset-x-3 bottom-4 z-40 sm:inset-x-auto sm:bottom-5 sm:right-5 ${
             isWidgetClosing
               ? "pointer-events-none animate-ebl-widget-out"
               : "animate-ebl-widget-in"
           }`}
+          style={chatbotZoomStyle}
           aria-hidden={isWidgetClosing}
         >
           <div
-            className="relative flex flex-col overflow-hidden rounded-[1.35rem] bg-[#DDECF7] shadow-2xl shadow-black/20 transition-[height,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            className="ebl-chatbot-zoom-content relative flex flex-col overflow-hidden rounded-[1.35rem] bg-[#DDECF7] shadow-2xl shadow-black/20 transition-[height,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
               height: hasStartedConversation
                 ? "min(520px, calc(100dvh - 2rem))"
@@ -3534,6 +3592,29 @@ export default function Chatbot() {
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 items-center rounded-full bg-white/70 p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => updateChatbotZoom(-1)}
+                    disabled={!canZoomOut}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#005B96] transition duration-200 hover:bg-white active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:active:scale-100"
+                    aria-label="Zoom out chatbot"
+                    title="Zoom out chatbot"
+                  >
+                    <MinimizeIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateChatbotZoom(1)}
+                    disabled={!canZoomIn}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#005B96] transition duration-200 hover:bg-white active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:active:scale-100"
+                    aria-label="Zoom in chatbot"
+                    title="Zoom in chatbot"
+                  >
+                    <PlusIcon />
+                  </button>
+                </div>
+
                 {canGoBackToIntro ? (
                   <button
                     type="button"
@@ -3576,7 +3657,7 @@ export default function Chatbot() {
               >
                 <div
                   ref={messageListRef}
-                  className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
+                  className="ebl-chatbot-scaled-content min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
                 >
                   {messages.map((message, index) => {
                     const shouldShowQuickActions =
